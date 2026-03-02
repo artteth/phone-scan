@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сканер рулонов ткани</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #3b82f6;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --surface-hover: #f1f5f9;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--background); color: var(--text); line-height: 1.5; min-height: 100vh; }
+        .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--surface); position: relative; }
+        .page { display: none; min-height: 100vh; padding-bottom: 80px; }
+        .page.active { display: block; }
+        .header { background: var(--primary); color: white; padding: 20px 16px; text-align: center; position: sticky; top: 0; z-index: 100; }
+        .header h1 { font-size: 1.25rem; font-weight: 600; }
+        .back-btn { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); }
+        .back-btn:hover { background: rgba(255, 255, 255, 0.1); }
+        .main-content { padding: 20px 16px; }
+        .scan-section { background: var(--surface); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px; }
+        .btn-large { width: 100%; padding: 16px 24px; font-size: 1.1rem; }
+        .divider { display: flex; align-items: center; margin: 20px 0; color: var(--text-muted); }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .divider span { padding: 0 16px; font-size: 0.875rem; }
+        .manual-input { display: flex; gap: 8px; }
+        .manual-input .input { flex: 1; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; font-size: 0.95rem; font-weight: 500; border: none; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s ease; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-secondary { background: var(--secondary); color: white; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-icon { font-size: 1.25rem; }
+        .action-buttons { display: flex; gap: 12px; margin-top: 16px; }
+        .action-buttons .btn { flex: 1; }
+        .input { width: 100%; padding: 12px 16px; font-size: 1rem; border: 2px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); transition: border-color 0.2s ease; }
+        .input:focus { outline: none; border-color: var(--primary); }
+        .input::placeholder { color: var(--text-muted); }
+        .recent-scans { margin-bottom: 24px; }
+        .recent-scans h3 { font-size: 1rem; color: var(--text-secondary); margin-bottom: 12px; }
+        .recent-list { display: flex; flex-direction: column; gap: 8px; }
+        .recent-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); cursor: pointer; transition: transform 0.2s ease; }
+        .recent-item:hover { transform: translateX(4px); }
+        .recent-code { font-weight: 600; color: var(--primary); }
+        .recent-time { font-size: 0.8rem; color: var(--text-muted); }
+        .empty-state { text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem; }
+        .orders-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+        .order-card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: pointer; transition: all 0.2s ease; }
+        .order-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+        .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .order-id { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+        .order-progress { font-size: 0.9rem; color: var(--text-secondary); }
+        .order-progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+        .order-progress-fill { height: 100%; background: var(--success); transition: width 0.3s ease; }
+        .order-status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
+        .order-status.pending { background: #fef3c7; color: #92400e; }
+        .order-status.in-progress { background: #dbeafe; color: #1e40af; }
+        .order-status.completed { background: #d1fae5; color: #065f46; }
+        .search-bar { margin-bottom: 16px; }
+        .order-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .summary-card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); text-align: center; }
+        .summary-label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+        .summary-value { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
+        .rolls-table-container { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 20px; }
+        .rolls-table { width: 100%; border-collapse: collapse; }
+        .rolls-table th, .rolls-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+        .rolls-table th { background: var(--surface-hover); font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        .rolls-table td { font-size: 0.95rem; }
+        .rolls-table tr:last-child td { border-bottom: none; }
+        .rolls-table tr:hover td { background: var(--surface-hover); }
+        .roll-roll-number { font-weight: 600; color: var(--primary); }
+        .roll-status { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+        .roll-status.pending { background: #fef3c7; color: #92400e; }
+        .roll-status.partial { background: #dbeafe; color: #1e40af; }
+        .roll-status.completed { background: #d1fae5; color: #065f46; }
+        .edit-roll-btn { background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.85rem; color: var(--primary); }
+        .edit-roll-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto; animation: modalSlideIn 0.3s ease; }
+        .modal-large { max-width: 480px; }
+        @keyframes modalSlideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .modal-header h2 { font-size: 1.1rem; font-weight: 600; }
+        .close-btn { background: transparent; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; padding: 4px 8px; line-height: 1; }
+        .close-btn:hover { color: var(--text); }
+        .record-info { background: var(--surface-hover); padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .info-row { display: flex; justify-content: space-between; padding: 4px 0; }
+        .info-label { color: var(--text-secondary); }
+        .info-value { font-weight: 600; }
+        .record-form { padding: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+        .field-hint { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+        .form-actions { display: flex; gap: 12px; margin-top: 24px; }
+        .form-actions .btn { flex: 1; }
+        .qr-reader { width: 100%; min-height: 250px; background: var(--text); }
+        .scanner-hint { text-align: center; padding: 16px; color: var(--text-secondary); font-size: 0.9rem; }
+        .page-description { color: var(--text-secondary); margin-bottom: 20px; font-size: 0.95rem; }
+        .qr-codes-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+        .qr-code-item { background: var(--surface); border-radius: var(--radius); padding: 16px; text-align: center; box-shadow: var(--shadow); }
+        .qr-code-item canvas { max-width: 100%; height: auto !important; margin-bottom: 8px; }
+        .qr-code-label { font-weight: 600; color: var(--primary); font-size: 0.95rem; }
+        .qr-instructions { background: var(--surface-hover); border-radius: var(--radius); padding: 16px; }
+        .qr-instructions h3 { font-size: 1rem; margin-bottom: 12px; }
+        .qr-instructions ol { padding-left: 20px; color: var(--text-secondary); }
+        .qr-instructions li { margin-bottom: 8px; font-size: 0.9rem; }
+        @media (min-width: 768px) { .app-container { max-width: 600px; margin: 40px auto; border-radius: var(--radius); box-shadow: var(--shadow-lg); min-height: auto; } .page { min-height: auto; } }
+        .toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+        .toast { background: var(--text); color: white; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 0.9rem; animation: toastSlideIn 0.3s ease; white-space: nowrap; }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.warning { background: var(--warning); }
+        @keyframes toastSlideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div id="scanner-page" class="page active">
+            <header class="header">
+                <h1>📦 Сканер рулонов ткани</h1>
+            </header>
+            <main class="main-content">
+                <div class="scan-section">
+                    <button id="scan-btn" class="btn btn-primary btn-large">
+                        <span class="btn-icon">📷</span>
+                        Сканировать QR-код
+                    </button>
+                    <div class="divider">
+                        <span>или</span>
+                    </div>
+                    <div class="manual-input">
+                        <input type="text" id="manual-code" placeholder="Введите код вручную (напр. 2020_1)" class="input">
+                        <button id="manual-submit" class="btn btn-secondary">Проверить</button>
+                    </div>
+                </div>
+                <div class="recent-scans">
+                    <h3>Последние сканирования</h3>
+                    <div id="recent-list" class="recent-list">
+                        <p class="empty-state">Пока нет сканирований</p>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button id="view-orders-btn" class="btn btn-outline">📋 Все заказы</button>
+                    <button id="view-qr-codes-btn" class="btn btn-outline">🔲 QR-коды</button>
+                </div>
+            </main>
+            <div id="scanner-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Сканирование QR-кода</h2>
+                        <button class="close-btn" id="close-scanner">&times;</button>
+                    </div>
+                    <div id="qr-reader" class="qr-reader"></div>
+                    <p class="scanner-hint">Наведите камеру на QR-код</p>
+                    <div style="padding:20px;border-top:1px solid var(--border);">
+                        <p class="scanner-hint">Или введите вручную:</p>
+                        <div class="manual-input" style="margin-top:8px;">
+                            <input type="text" id="manual-code-modal" placeholder="напр. 2020_1" class="input">
+                            <button id="manual-submit-modal" class="btn btn-primary">OK</button>
+                        </div>
+                        <p class="scanner-hint" style="margin-top:16px;">Быстрый выбор:</p>
+                        <div id="quick-codes" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">
+                            <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2020_1">2020_1</button>
+                            <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2020_2">2020_2</button>
+                            <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2020_3">2020_3</button>
+                            <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2021_1">2021_1</button>
+                            <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2021_2">2021_2</button>
+                            <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2022_1">2022_1</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="orders-page" class="page">
+            <header class="header">
+                <button class="back-btn" id="back-to-scanner">← Назад</button>
+                <h1>📋 Все заказы</h1>
+            </header>
+            <main class="main-content">
+                <div class="search-bar">
+                    <input type="text" id="order-search" placeholder="Поиск по номеру заказа..." class="input">
+                </div>
+                <div id="orders-list" class="orders-list"></div>
+                <button id="add-order-btn" class="btn btn-primary">+ Новый заказ</button>
+            </main>
+        </div>
+        <div id="order-detail-page" class="page">
+            <header class="header">
+                <button class="back-btn" id="back-to-orders">← Назад</button>
+                <h1>Заказ <span id="detail-order-id"></span></h1>
+            </header>
+            <main class="main-content">
+                <div class="order-summary">
+                    <div class="summary-card">
+                        <span class="summary-label">Прогресс</span>
+                        <span id="order-progress" class="summary-value">0/0 рулонов</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="summary-label">Статус</span>
+                        <span id="order-status" class="summary-value status-badge">В работе</span>
+                    </div>
+                </div>
+                <div class="rolls-table-container">
+                    <table id="rolls-table" class="rolls-table">
+                        <thead>
+                            <tr><th>№</th><th>Заводской</th><th>Измеренный</th><th>Усадка</th><th>Статус</th><th></th></tr>
+                        </thead>
+                        <tbody id="rolls-tbody"></tbody>
+                    </table>
+                </div>
+                <button id="add-roll-btn" class="btn btn-primary">+ Добавить рулон</button>
+            </main>
+        </div>
+        <div id="record-modal" class="modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2>Запись данных рулона</h2>
+                    <button class="close-btn" id="close-record">&times;</button>
+                </div>
+                <div class="record-info">
+                    <div class="info-row">
+                        <span class="info-label">Заказ:</span>
+                        <span id="record-order-id" class="info-value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Рулон:</span>
+                        <span id="record-roll-number" class="info-value">-</span>
+                    </div>
+                </div>
+                <form id="record-form" class="record-form">
+                    <div class="form-group">
+                        <label for="factory-length">Заводской метраж (м) *</label>
+                        <input type="number" id="factory-length" class="input" step="0.1" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="measured-length">Измеренный метраж (м)</label>
+                        <input type="number" id="measured-length" class="input" step="0.1" min="0">
+                        <span class="field-hint">Можно заполнить позже</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="shrinkage">Усадка (%)</label>
+                        <input type="number" id="shrinkage" class="input" step="0.1" min="0" max="100">
+                        <span class="field-hint">Можно заполнить позже</span>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="save-partial" class="btn btn-outline">Записать частично</button>
+                        <button type="submit" class="btn btn-primary">Записать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="new-order-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Новый заказ</h2>
+                    <button class="close-btn" id="close-new-order">&times;</button>
+                </div>
+                <form id="new-order-form" class="record-form">
+                    <div class="form-group">
+                        <label for="new-order-id">Номер заказа *</label>
+                        <input type="text" id="new-order-id" class="input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-order-rolls">Количество рулонов *</label>
+                        <input type="number" id="new-order-rolls" class="input" min="1" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Создать заказ</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="qr-codes-page" class="page">
+            <header class="header">
+                <button class="back-btn" id="back-to-scanner2">← Назад</button>
+                <h1>🔲 QR-коды для тестирования</h1>
+            </header>
+            <main class="main-content">
+                <p class="page-description">Отсканируйте эти коды камерой телефона или введите их вручную для тестирования.</p>
+                <div id="qr-codes-grid" class="qr-codes-grid"></div>
+                <div class="qr-instructions">
+                    <h3>Как использовать:</h3>
+                    <ol>
+                        <li>Откройте эту страницу на компьютере</li>
+                        <li>На другом устройстве (телефоне) откройте то же приложение</li>
+                        <li>Сканируйте коды камерой или вводите их вручную</li>
+                        <li>Записывайте данные по каждому рулону</li>
+                    </ol>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script>
+const STORAGE_KEY = 'fabric_inventory_data';
+const RECENT_SCANS_KEY = 'recent_scans';
+const TEST_CODES = ['2020_1','2020_2','2020_3','2020_4','2020_5','2021_1','2021_2','2021_3','2022_1','2022_2','2022_3','2022_4'];
+let orders = {}, recentScans = [], currentOrderId = null, currentRollNumber = null, html5QrcodeScanner = null;
+
+document.addEventListener('DOMContentLoaded', () => { loadData(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); });
+
+function loadData(){const storedOrders=localStorage.getItem(STORAGE_KEY);const storedScans=localStorage.getItem(RECENT_SCANS_KEY);if(storedOrders){orders=JSON.parse(storedOrders);} if(storedScans){recentScans=JSON.parse(storedScans);}}
+function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));localStorage.setItem(RECENT_SCANS_KEY,JSON.stringify(recentScans));}
+function initializeTestData(){orders['2020']={id:'2020',totalRolls:5,rolls:[{rollNumber:1,factoryLength:50,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:2,factoryLength:48,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:49,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:5,factoryLength:51,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2021']={id:'2021',totalRolls:3,rolls:[{rollNumber:1,factoryLength:45,measuredLength:43.5,shrinkage:3.3,status:'completed'},{rollNumber:2,factoryLength:47,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:46,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2022']={id:'2022',totalRolls:4,rolls:[{rollNumber:1,factoryLength:55,measuredLength:53.8,shrinkage:2.2,status:'completed'},{rollNumber:2,factoryLength:53,measuredLength:51.5,shrinkage:2.8,status:'completed'},{rollNumber:3,factoryLength:54,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'}]};saveData();}
+
+function initializeEventListeners(){document.getElementById('scan-btn').addEventListener('click',openScanner);document.getElementById('manual-submit').addEventListener('click',handleManualInput);document.getElementById('manual-submit-modal').addEventListener('click',handleManualInputModal);document.querySelectorAll('#quick-codes button').forEach(btn=>{btn.addEventListener('click',()=>{const code=btn.dataset.code;closeScanner();processScannedCode(code);});});document.getElementById('manual-code').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleManualInput();});document.getElementById('manual-code-modal').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleManualInputModal();});document.getElementById('view-orders-btn').addEventListener('click',()=>showPage('orders-page'));document.getElementById('view-qr-codes-btn').addEventListener('click',()=>showPage('qr-codes-page'));document.getElementById('back-to-scanner').addEventListener('click',()=>showPage('scanner-page'));document.getElementById('back-to-scanner2').addEventListener('click',()=>showPage('scanner-page'));document.getElementById('back-to-orders').addEventListener('click',()=>showPage('orders-page'));document.getElementById('close-scanner').addEventListener('click',closeScanner);document.getElementById('close-record').addEventListener('click',closeRecordModal);document.getElementById('record-form').addEventListener('submit',handleRecordSubmit);document.getElementById('save-partial').addEventListener('click',handlePartialSave);document.getElementById('add-order-btn').addEventListener('click',openNewOrderModal);document.getElementById('close-new-order').addEventListener('click',closeNewOrderModal);document.getElementById('new-order-form').addEventListener('submit',handleNewOrderSubmit);document.getElementById('add-roll-btn').addEventListener('click',openAddRollModal);document.getElementById('order-search').addEventListener('input',handleSearch);}
+
+function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page')renderOrdersList();}
+function openScanner(){const modal=document.getElementById('scanner-modal');modal.classList.add('active');if(!html5QrcodeScanner){html5QrcodeScanner=new Html5QrcodeScanner('qr-reader',{fps:10,qrbox:{width:250,height:250}},false);} html5QrcodeScanner.render(handleQRCodeScan,(error)=>{console.log('Scanner error:',error);});}
+function closeScanner(){const modal=document.getElementById('scanner-modal');modal.classList.remove('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(err=>console.log('Error clearing scanner:',err));}}
+function handleQRCodeScan(decodedText){closeScanner();processScannedCode(decodedText);}
+function handleManualInput(){const input=document.getElementById('manual-code');const code=input.value.trim();if(code){processScannedCode(code);input.value='';}else{showToast('Введите код','error');}}function handleManualInputModal(){const input=document.getElementById('manual-code-modal');const code=input.value.trim();if(code){closeScanner();processScannedCode(code);input.value='';}else{showToast('Введите код','error');}}
+function processScannedCode(code){const parts=code.split('_');if(parts.length!==2){showToast('Неверный формат кода. Используйте формат: НОМЕР_РУЛОН (например, 2020_1)','error');return;}const orderId=parts[0];const rollNumber=parseInt(parts[1]);if(isNaN(rollNumber)){showToast('Неверный номер рулона','error');return;}addToRecentScans(code);if(!orders[orderId]){const totalRolls=prompt('Заказ не найден. Введите общее количество рулонов:','5');if(totalRolls===null)return;const rollCount=parseInt(totalRolls);if(isNaN(rollCount)||rollCount<1){showToast('Неверное количество рулонов','error');return;}createOrder(orderId,rollCount,rollNumber);}else{const order=orders[orderId];if(rollNumber>order.totalRolls){showToast('В заказе '+order.totalRolls+' рулонов. Рулон '+rollNumber+' не существует.','error');return;}}openRecordModal(orderId,rollNumber);}
+function addToRecentScans(code){const timestamp=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});recentScans=recentScans.filter(scan=>scan.code!==code);recentScans.unshift({code,timestamp});recentScans=recentScans.slice(0,5);saveData();renderRecentScans();}
+function renderRecentScans(){const container=document.getElementById('recent-list');if(recentScans.length===0){container.innerHTML='<p class="empty-state">Пока нет сканирований</p>';return;}container.innerHTML=recentScans.map(scan=>'<div class="recent-item" data-code="'+scan.code+'"><span class="recent-code">'+scan.code+'</span><span class="recent-time">'+scan.timestamp+'</span></div>').join('');container.querySelectorAll('.recent-item').forEach(item=>{item.addEventListener('click',()=>{const code=item.dataset.code;processScannedCode(code);});});}
+function openRecordModal(orderId,rollNumber){currentOrderId=orderId;currentRollNumber=rollNumber;const order=orders[orderId];const roll=order.rolls.find(r=>r.rollNumber===rollNumber);document.getElementById('record-order-id').textContent=orderId;document.getElementById('record-roll-number').textContent=rollNumber;document.getElementById('factory-length').value=roll&&roll.factoryLength||'';document.getElementById('measured-length').value=roll&&roll.measuredLength||'';document.getElementById('shrinkage').value=roll&&roll.shrinkage||'';document.getElementById('record-modal').classList.add('active');}
+function closeRecordModal(){document.getElementById('record-modal').classList.remove('active');currentOrderId=null;currentRollNumber=null;}
+function handleRecordSubmit(e){e.preventDefault();saveRollData(true);}
+function handlePartialSave(){saveRollData(false);}
+function saveRollData(complete){const factoryLength=parseFloat(document.getElementById('factory-length').value);const measuredLength=parseFloat(document.getElementById('measured-length').value)||null;const shrinkage=parseFloat(document.getElementById('shrinkage').value)||null;if(isNaN(factoryLength)){showToast('Введите заводской метраж','error');return;}const order=orders[currentOrderId];let roll=order.rolls.find(r=>r.rollNumber===currentRollNumber);if(!roll){roll={rollNumber:currentRollNumber,factoryLength,measuredLength:null,shrinkage:null,status:'pending'};order.rolls.push(roll);}roll.factoryLength=factoryLength;if(measuredLength!==null&&shrinkage!==null){roll.measuredLength=measuredLength;roll.shrinkage=shrinkage;roll.status='completed';}else if(measuredLength!==null||shrinkage!==null){roll.measuredLength=measuredLength;roll.shrinkage=shrinkage;roll.status='partial';}else{roll.status='pending';}updateOrderStatus(order);saveData();closeRecordModal();showToast('Данные сохранены','success');if(document.getElementById('order-detail-page').classList.contains('active')){renderOrderDetail(currentOrderId);}}
+function updateOrderStatus(order){const completedCount=order.rolls.filter(r=>r.status==='completed').length;const partialCount=order.rolls.filter(r=>r.status==='partial').length;if(completedCount===order.totalRolls){order.status='completed';}else if(completedCount>0||partialCount>0){order.status='in-progress';}else{order.status='pending';}}
+function renderOrdersList(filter=''){const container=document.getElementById('orders-list');const filteredOrders=Object.values(orders).filter(order=>order.id.includes(filter));if(filteredOrders.length===0){container.innerHTML='<p class="empty-state">Заказов не найдено</p>';return;}container.innerHTML=filteredOrders.map(order=>{const completedCount=order.rolls.filter(r=>r.status==='completed').length;const progress=(completedCount/order.totalRolls)*100;let statusClass='pending';let statusText='Ожидает';if(order.status==='in-progress'){statusClass='in-progress';statusText='В работе';}else if(order.status==='completed'){statusClass='completed';statusText='Завершён';}return'<div class="order-card" data-order-id="'+order.id+'"><div class="order-header"><span class="order-id">Заказ '+order.id+'</span><span class="order-status '+statusClass+'">'+statusText+'</span></div><div class="order-progress">'+completedCount+' из '+order.totalRolls+' рулонов</div><div class="order-progress-bar"><div class="order-progress-fill" style="width: '+progress+'%"></div></div></div>';}).join('');container.querySelectorAll('.order-card').forEach(card=>{card.addEventListener('click',()=>{const orderId=card.dataset.orderId;showOrderDetail(orderId);});});}
+function handleSearch(e){renderOrdersList(e.target.value);}
+function showOrderDetail(orderId){currentOrderId=orderId;document.getElementById('detail-order-id').textContent=orderId;renderOrderDetail(orderId);showPage('order-detail-page');}
+function renderOrderDetail(orderId){const order=orders[orderId];const completedCount=order.rolls.filter(r=>r.status==='completed').length;document.getElementById('order-progress').textContent=completedCount+'/'+order.totalRolls+' рулонов';let statusClass='pending';let statusText='Ожидает';if(order.status==='in-progress'){statusClass='in-progress';statusText='В работе';}else if(order.status==='completed'){statusClass='completed';statusText='Завершён';}const statusBadge=document.getElementById('order-status');statusBadge.className='summary-value status-badge '+statusClass;statusBadge.textContent=statusText;const tbody=document.getElementById('rolls-tbody');tbody.innerHTML=order.rolls.map(roll=>{let statusClass='pending';let statusText='Ожидает';if(roll.status==='partial'){statusClass='partial';statusText='Частично';}else if(roll.status==='completed'){statusClass='completed';statusText='Готов';}return'<tr><td class="roll-roll-number">'+roll.rollNumber+'</td><td>'+(roll.factoryLength!==null?roll.factoryLength+' м':'-')+'</td><td>'+(roll.measuredLength!==null?roll.measuredLength+' м':'-')+'</td><td>'+(roll.shrinkage!==null?roll.shrinkage+'%':'-')+'</td><td><span class="roll-status '+statusClass+'">'+statusText+'</span></td><td><button class="edit-roll-btn" data-roll="'+roll.rollNumber+'">Изменить</button></td></tr>';}).join('');tbody.querySelectorAll('.edit-roll-btn').forEach(btn=>{btn.addEventListener('click',()=>{const rollNumber=parseInt(btn.dataset.roll);openRecordModal(orderId,rollNumber);});});}
+function openNewOrderModal(){document.getElementById('new-order-modal').classList.add('active');document.getElementById('new-order-id').value='';document.getElementById('new-order-rolls').value='';}
+function closeNewOrderModal(){document.getElementById('new-order-modal').classList.remove('active');}
+function handleNewOrderSubmit(e){e.preventDefault();const orderId=document.getElementById('new-order-id').value.trim();const totalRolls=parseInt(document.getElementById('new-order-rolls').value);if(!orderId||isNaN(totalRolls)||totalRolls<1){showToast('Заполните все поля корректно','error');return;}createOrder(orderId,totalRolls);closeNewOrderModal();showToast('Заказ создан','success');renderOrdersList();}
+function createOrder(orderId,totalRolls,activeRollNumber=null){const rolls=[];for(let i=1;i<=totalRolls;i++){rolls.push({rollNumber:i,factoryLength:null,measuredLength:null,shrinkage:null,status:'pending'});}orders[orderId]={id:orderId,totalRolls,rolls,status:'pending'};saveData();if(activeRollNumber){openRecordModal(orderId,activeRollNumber);}}
+function openAddRollModal(){const rollNumber=orders[currentOrderId].rolls.length+1;openRecordModal(currentOrderId,rollNumber);}
+function renderQRCodePage(){const container=document.getElementById('qr-codes-grid');container.innerHTML=TEST_CODES.map(code=>'<div class="qr-code-item"><canvas id="qr-'+code+'"></canvas><div class="qr-code-label">'+code+'</div></div>').join('');TEST_CODES.forEach(code=>{const canvas=document.getElementById('qr-'+code);if(canvas){QRCode.toCanvas(canvas,code,{width:120,margin:2,color:{dark:'#1e293b',light:'#ffffff'}});}});}
+function showToast(message,type='info'){let container=document.querySelector('.toast-container');if(!container){container=document.createElement('div');container.className='toast-container';document.body.appendChild(container);}const toast=document.createElement('div');toast.className='toast '+type;toast.textContent=message;container.appendChild(toast);setTimeout(()=>{toast.remove();},3000);}
+    </script>
+</body>
+</html>
