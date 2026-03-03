@@ -139,10 +139,26 @@ function getData() {
     }
     
     const rollNumber = row[1] ? parseInt(row[1]) : 0;  // Column B: Roll Number
-    const factoryLength = row[2];  // Column C: Factory Length
-    const measuredLength = row[3];  // Column D: Measured Length
-    const shrinkage = row[4];  // Column E: Shrinkage
-    const status = row[5];  // Column F: Status
+    let factoryLength = row[2];  // Column C: Factory Length
+    let measuredLength = row[3];  // Column D: Measured Length
+    let shrinkage = row[4];  // Column E: Shrinkage
+    let status = row[5];  // Column F: Status
+    
+    // Convert string numbers with comma to point
+    if (typeof factoryLength === 'string') factoryLength = parseFloat(factoryLength.replace(',', '.'));
+    if (typeof measuredLength === 'string') measuredLength = parseFloat(measuredLength.replace(',', '.'));
+    if (typeof shrinkage === 'string') shrinkage = parseFloat(shrinkage.replace(',', '.'));
+    
+    // Calculate status automatically if not set
+    if (!status || status === '') {
+      if (measuredLength && shrinkage) {
+        status = 'completed';
+      } else if (factoryLength && (measuredLength || shrinkage)) {
+        status = 'partial';
+      } else {
+        status = 'pending';
+      }
+    }
     
     // Skip if no roll number
     if (!rollNumber || rollNumber === 0) continue;
@@ -157,7 +173,7 @@ function getData() {
       factoryLength: factoryLength || null,
       measuredLength: measuredLength || null,
       shrinkage: shrinkage || null,
-      status: status || 'pending'
+      status: status
     });
   }
   
@@ -189,13 +205,30 @@ function saveData(data) {
   // Write orders data
   if (ordersArray.length > 0) {
     ordersArray.forEach(item => {
+      // Convert string numbers with comma to point
+      let factoryLength = item.factoryLength;
+      let measuredLength = item.measuredLength;
+      let shrinkage = item.shrinkage;
+      
+      if (typeof factoryLength === 'string') factoryLength = parseFloat(factoryLength.replace(',', '.'));
+      if (typeof measuredLength === 'string') measuredLength = parseFloat(measuredLength.replace(',', '.'));
+      if (typeof shrinkage === 'string') shrinkage = parseFloat(shrinkage.replace(',', '.'));
+      
+      // Calculate status automatically
+      let status = 'pending';
+      if (measuredLength && shrinkage) {
+        status = 'completed';
+      } else if (factoryLength && (measuredLength || shrinkage)) {
+        status = 'partial';
+      }
+      
       allRows.push([
         item.orderId,
         item.rollNumber,
-        item.factoryLength || '',
-        item.measuredLength || '',
-        item.shrinkage || '',
-        item.status || 'pending'
+        factoryLength || '',
+        measuredLength || '',
+        shrinkage || '',
+        status
       ]);
     });
   }
