@@ -356,7 +356,7 @@ const RECENT_SCANS_KEY = 'recent_scans';
 const TEST_CODES = ['2020_1','2020_2','2020_3','2020_4','2020_5','2021_1','2021_2','2021_3','2022_1','2022_2','2022_3','2022_4'];
 let orders = {}, recentScans = [], currentOrderId = null, currentRollNumber = null, html5QrcodeScanner = null;
 
-document.addEventListener('DOMContentLoaded', () => { loadData(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); syncWithGoogleSheets(true); setInterval(()=>{console.log('Auto-sync...');syncWithGoogleSheets(false);},30000); });
+document.addEventListener('DOMContentLoaded', () => { loadData(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); syncWithGoogleSheets(true); setInterval(()=>{console.log('Auto-sync...');syncWithGoogleSheets(false);},10000); });
 
 function loadData(){const storedOrders=localStorage.getItem(STORAGE_KEY);const storedScans=localStorage.getItem(RECENT_SCANS_KEY);if(storedOrders){orders=JSON.parse(storedOrders);} if(storedScans){recentScans=JSON.parse(storedScans);}}
 function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));localStorage.setItem(RECENT_SCANS_KEY,JSON.stringify(recentScans));}
