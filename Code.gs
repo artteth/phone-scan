@@ -63,18 +63,10 @@ function handleRequest(e) {
         result = { error: 'Unknown action' };
     }
     
-    const output = ContentService.createTextOutput(JSON.stringify(result));
-    output.setMimeType(ContentService.MimeType.JSON);
-    output.addHeader('Access-Control-Allow-Origin', '*');
-    output.addHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    output.addHeader('Access-Control-Allow-Headers', 'Content-Type');
-    return output;
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
     
   } catch(error) {
-    const output = ContentService.createTextOutput(JSON.stringify({ error: error.message }));
-    output.setMimeType(ContentService.MimeType.JSON);
-    output.addHeader('Access-Control-Allow-Origin', '*');
-    return output;
+    return ContentService.createTextOutput(JSON.stringify({ error: error.message })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
