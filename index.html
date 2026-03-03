@@ -363,7 +363,7 @@ function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));loc
 function initializeTestData(){orders['2020']={id:'2020',totalRolls:5,rolls:[{rollNumber:1,factoryLength:50,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:2,factoryLength:48,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:49,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:5,factoryLength:51,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2021']={id:'2021',totalRolls:3,rolls:[{rollNumber:1,factoryLength:45,measuredLength:43.5,shrinkage:3.3,status:'completed'},{rollNumber:2,factoryLength:47,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:46,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2022']={id:'2022',totalRolls:4,rolls:[{rollNumber:1,factoryLength:55,measuredLength:53.8,shrinkage:2.2,status:'completed'},{rollNumber:2,factoryLength:53,measuredLength:51.5,shrinkage:2.8,status:'completed'},{rollNumber:3,factoryLength:54,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'}]};saveData();}
 
 // ===== Google Sheets Sync =====
-const GOOGLE_SHEETS_URL='https://script.google.com/macros/s/AKfycbzh9v85hHW1z7XbE9CkBCzSo9pj-VLQYYfQnPiwyRg1pUoLudzF2d4CXlh6TK2M0dYB/exec';
+const GOOGLE_SHEETS_URL='https://script.google.com/macros/s/AKfycbxrD_B4A37h6QlyXgn4TX_nQYHgwGfkTAj4qVBD5-g_OM9-nMJjU1zhvIcMX4yztk36/exec';
 let isSyncing=false;
 let forceSync=false;
 
