@@ -18,6 +18,38 @@ function setup() {
 }
 
 function doGet(e) {
+  const mode = e.parameter.mode || 'json';
+  
+  // JSONP mode for CORS bypass
+  if (mode === 'jsonp') {
+    const callback = e.parameter.callback || 'callback';
+    const action = e.parameter.action || 'getData';
+    
+    let result;
+    try {
+      if (action === 'getData') {
+        result = { ok: true, data: getData() };
+      } else if (action === 'saveData') {
+        const dataStr = e.parameter.data;
+        let data = [];
+        if (dataStr) {
+          data = JSON.parse(decodeURIComponent(dataStr));
+        }
+        result = { ok: true, data: saveData(data) };
+      } else {
+        result = { ok: false, error: 'Unknown action' };
+      }
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    
+    const output = ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(result) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    return output;
+  }
+  
+  // Regular JSON mode
   return handleRequest(e);
 }
 
@@ -164,20 +196,6 @@ function saveData(data) {
         item.measuredLength || '',
         item.shrinkage || '',
         item.status || 'pending'
-      ]);
-    });
-  }
-  
-  // Write recent scans
-  if (data.recentScans && data.recentScans.length > 0) {
-    data.recentScans.forEach(scan => {
-      allRows.push([
-        'SCAN:' + scan.code,
-        scan.timestamp,
-        '',
-        '',
-        '',
-        ''
       ]);
     });
   }
