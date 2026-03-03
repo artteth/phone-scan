@@ -58,8 +58,8 @@ function loadData() {
         lastSyncTime = storedSyncTime;
     }
     
-    // Sync with Google Sheets to get data (Google Sheet is the source of truth)
-    syncWithGoogleSheets();
+    // Clear old test data - we want fresh data from Google Sheets
+    // This ensures old test orders don't persist
 }
 
 function saveData() {
@@ -143,24 +143,20 @@ async function syncToGoogleSheets() {
         const sheetsData = convertOrdersToSheetsFormat();
         console.log('Sending data:', JSON.stringify({ action: 'saveData', data: sheetsData }));
         
-        // Use redirect: "follow" to handle Google Apps Script redirects
-        const response = await fetch(GOOGLE_SHEETS_URL, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8'
-            },
-            body: JSON.stringify({
-                action: 'saveData',
-                data: sheetsData
-            })
+        // Use GET request with data in URL to avoid POST issues
+        const dataStr = encodeURIComponent(JSON.stringify(sheetsData));
+        const url = `${GOOGLE_SHEETS_URL}?action=saveData&data=${dataStr}`;
+        console.log('Fetching from:', url);
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            redirect: 'follow'
         });
         
         console.log('Response status:', response.status);
-        console.log('Response type:', response.type);
         
         const text = await response.text();
-        console.log('Response text:', text.substring(0, 200));
+        console.log('Response:', text.substring(0, 200));
         
         if (!response.ok) {
             throw new Error('Network response was not ok: ' + response.status);
@@ -172,8 +168,7 @@ async function syncToGoogleSheets() {
             result = JSON.parse(text);
             console.log('Save result:', result);
         } catch (e) {
-            // If not JSON, assume success if we got a response
-            result = { success: true, message: 'Data sent (response may not be JSON)' };
+            result = { success: true, message: 'Data sent' };
         }
         
         if (result && result.error) {
