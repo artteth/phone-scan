@@ -102,8 +102,17 @@ async function syncWithGoogleSheets() {
             throw new Error('Server error: ' + data.error);
         }
         
+        // If force sync, clear local data first
+        if (forceSync) {
+            console.log('Force sync - clearing local data');
+            orders = {};
+            recentScans = [];
+            forceSync = false;
+        }
+        
         if (data && data.orders) {
-            // Merge data from Google Sheets with local data
+            // Replace local data with data from Google Sheets
+            orders = {};
             mergeOrdersData(data.orders);
             
             // Also sync recent scans
@@ -111,10 +120,14 @@ async function syncWithGoogleSheets() {
                 recentScans = data.recentScans;
             }
             
-            saveData();
+            // Save to local storage
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+            localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(recentScans));
+            
             renderRecentScans();
             renderOrdersList();
             console.log('Data synced from Google Sheets successfully');
+            console.log('Orders:', JSON.stringify(orders));
         }
         
         lastSyncTime = new Date().toISOString();
@@ -129,6 +142,20 @@ async function syncWithGoogleSheets() {
     } finally {
         isSyncing = false;
     }
+}
+
+function forceRefresh() {
+    console.log('Force refresh - clearing local data and syncing');
+    forceSync = true;
+    // Clear local storage
+    orders = {};
+    recentScans = [];
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(RECENT_SCANS_KEY);
+    renderOrdersList();
+    renderRecentScans();
+    // Trigger sync
+    syncWithGoogleSheets();
 }
 
 async function syncToGoogleSheets() {
