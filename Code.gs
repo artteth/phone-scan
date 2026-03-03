@@ -150,9 +150,17 @@ function saveData(data) {
   
   const allRows = [];
   
+  // Handle both array format and object format
+  let ordersArray = [];
+  if (Array.isArray(data)) {
+    ordersArray = data;
+  } else if (data && data.orders && Array.isArray(data.orders)) {
+    ordersArray = data.orders;
+  }
+  
   // Write orders data
-  if (data.orders && data.orders.length > 0) {
-    data.orders.forEach(item => {
+  if (ordersArray.length > 0) {
+    ordersArray.forEach(item => {
       allRows.push([
         item.orderId,
         item.rollNumber,
