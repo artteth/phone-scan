@@ -24,6 +24,7 @@ let currentRollNumber = null;
 let html5QrcodeScanner = null;
 let isSyncing = false;
 let lastSyncTime = null;
+let forceSync = false;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
