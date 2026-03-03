@@ -64,9 +64,13 @@ function getData() {
   // Skip header row
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    const orderId = row[0];  // Column A: Order ID
+    let orderId = row[0];  // Column A: Order ID
     
-    if (!orderId) continue;
+    // Skip empty rows
+    if (!orderId && orderId !== 0) continue;
+    
+    // Convert to string for comparison
+    orderId = String(orderId);
     
     // Check if this is a recent scan entry (starts with SCAN:)
     if (orderId.startsWith('SCAN:')) {
@@ -86,11 +90,14 @@ function getData() {
       };
     }
     
-    const rollNumber = row[1];  // Column B: Roll Number
+    const rollNumber = row[1] ? parseInt(row[1]) : 0;  // Column B: Roll Number
     const factoryLength = row[2];  // Column C: Factory Length
     const measuredLength = row[3];  // Column D: Measured Length
     const shrinkage = row[4];  // Column E: Shrinkage
     const status = row[5];  // Column F: Status
+    
+    // Skip if no roll number
+    if (!rollNumber || rollNumber === 0) continue;
     
     // Update total rolls if needed
     if (rollNumber > orders[orderId].totalRolls) {

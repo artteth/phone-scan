@@ -6,7 +6,7 @@
 // ===== Constants =====
 const STORAGE_KEY = 'fabric_inventory_data';
 const RECENT_SCANS_KEY = 'recent_scans';
-const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzh9v85hHW1z7XbE9CkBCzSo9pj-VLQYYfQnPiwyRg1pUoLudzF2d4CXlh6TK2M0dYB/exec';
+const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzcki4nX2ZDBs46mquFURIaD88yWDSjzxhdNJkcgn2Oe2G6tPahBm-auZTo_nXGsUDz/exec';
 const SYNC_STATUS_KEY = 'last_sync_time';
 
 // Test data codes for QR generation
