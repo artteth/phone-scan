@@ -24,7 +24,6 @@ let currentRollNumber = null;
 let html5QrcodeScanner = null;
 let isSyncing = false;
 let lastSyncTime = null;
-let syncTimeout = null;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -54,19 +53,17 @@ function loadData() {
     if (storedSyncTime) {
         lastSyncTime = storedSyncTime;
     }
+    
+    // Sync with Google Sheets to get data (Google Sheet is the source of truth)
+    syncWithGoogleSheets();
 }
 
 function saveData() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
     localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(recentScans));
     
-    // Debounced auto-sync to Google Sheets after saving
-    if (syncTimeout) {
-        clearTimeout(syncTimeout);
-    }
-    syncTimeout = setTimeout(() => {
-        syncToGoogleSheets();
-    }, 2000); // Wait 2 seconds before syncing to avoid too many requests
+    // Immediately sync to Google Sheets
+    syncToGoogleSheets();
 }
 
 // ===== Google Sheets Sync =====
