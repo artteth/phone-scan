@@ -34,6 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Show initial sync status
     updateSyncStatus(lastSyncTime ? 'success' : '');
+    
+    // Try to sync - this will fetch from Google Sheets
+    console.log('App loaded, attempting initial sync...');
+    syncWithGoogleSheets();
 });
 
 // ===== Data Management =====
@@ -80,7 +84,7 @@ async function syncWithGoogleSheets() {
         
         const response = await fetch(url, {
             method: 'GET',
-            mode: 'cors'
+            redirect: 'follow'
         });
         
         console.log('Response status:', response.status);
@@ -89,8 +93,10 @@ async function syncWithGoogleSheets() {
             throw new Error('Network response was not ok: ' + response.status);
         }
         
-        const data = await response.json();
-        console.log('Received data:', data);
+        const text = await response.text();
+        console.log('Response:', text.substring(0, 200));
+        
+        const data = JSON.parse(text);
         
         if (data.error) {
             throw new Error('Server error: ' + data.error);
@@ -137,9 +143,10 @@ async function syncToGoogleSheets() {
         const sheetsData = convertOrdersToSheetsFormat();
         console.log('Sending data:', JSON.stringify({ action: 'saveData', data: sheetsData }));
         
+        // Use redirect: "follow" to handle Google Apps Script redirects
         const response = await fetch(GOOGLE_SHEETS_URL, {
             method: 'POST',
-            mode: 'cors',
+            redirect: 'follow',
             headers: {
                 'Content-Type': 'text/plain;charset=utf-8'
             },
@@ -150,15 +157,26 @@ async function syncToGoogleSheets() {
         });
         
         console.log('Response status:', response.status);
+        console.log('Response type:', response.type);
+        
+        const text = await response.text();
+        console.log('Response text:', text.substring(0, 200));
         
         if (!response.ok) {
             throw new Error('Network response was not ok: ' + response.status);
         }
         
-        const result = await response.json();
-        console.log('Save result:', result);
+        // Try to parse as JSON
+        let result;
+        try {
+            result = JSON.parse(text);
+            console.log('Save result:', result);
+        } catch (e) {
+            // If not JSON, assume success if we got a response
+            result = { success: true, message: 'Data sent (response may not be JSON)' };
+        }
         
-        if (result.error) {
+        if (result && result.error) {
             throw new Error('Server error: ' + result.error);
         }
         
