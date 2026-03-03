@@ -330,6 +330,24 @@
                 </form>
             </div>
         </div>
+        <div id="confirm-modal" class="modal">
+            <div class="modal-content" style="max-width: 360px;">
+                <div class="modal-header">
+                    <h2>⚠️ Принудительная синхронизация</h2>
+                    <button class="close-btn" id="close-confirm">&times;</button>
+                </div>
+                <div style="padding: 20px; text-align: center;">
+                    <p style="margin-bottom: 20px; color: var(--text-muted); line-height: 1.5;">
+                        Вы собираетесь выполнить полную очистку локальных данных и синхронизацию с Google Таблицей.<br><br>
+                        <strong>Все несохранённые данные будут потеряны!</strong>
+                    </p>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="confirm-cancel" class="btn btn-secondary" style="flex: 1;">Отменить</button>
+                        <button id="confirm-continue" class="btn btn-primary" style="flex: 1;">Продолжить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div id="qr-codes-page" class="page">
             <header class="header">
                 <button class="back-btn" id="back-to-scanner2">← Назад</button>

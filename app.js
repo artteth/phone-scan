@@ -146,8 +146,16 @@ async function syncWithGoogleSheets() {
 }
 
 function forceRefresh() {
+    console.log('Force refresh clicked - showing confirmation');
+    // Show confirmation modal instead of alert
+    const modal = document.getElementById('confirm-modal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
+function executeForceRefresh() {
     console.log('Force refresh - clearing local data and syncing');
-    alert('Force refresh clicked! Clearing data and syncing...');
     forceSync = true;
     // Clear local storage
     orders = {};
@@ -158,6 +166,18 @@ function forceRefresh() {
     renderRecentScans();
     // Trigger sync
     syncWithGoogleSheets();
+    // Close modal
+    const modal = document.getElementById('confirm-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function closeConfirmModal() {
+    const modal = document.getElementById('confirm-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
 }
 
 async function syncToGoogleSheets() {
@@ -449,6 +469,22 @@ function initializeEventListeners() {
     const forceRefreshBtn = document.getElementById('force-refresh-btn');
     if (forceRefreshBtn) {
         forceRefreshBtn.addEventListener('click', forceRefresh);
+    }
+
+    // Confirm modal buttons
+    const confirmContinueBtn = document.getElementById('confirm-continue');
+    if (confirmContinueBtn) {
+        confirmContinueBtn.addEventListener('click', executeForceRefresh);
+    }
+
+    const confirmCancelBtn = document.getElementById('confirm-cancel');
+    if (confirmCancelBtn) {
+        confirmCancelBtn.addEventListener('click', closeConfirmModal);
+    }
+
+    const closeConfirmBtn = document.getElementById('close-confirm');
+    if (closeConfirmBtn) {
+        closeConfirmBtn.addEventListener('click', closeConfirmModal);
     }
     
     // Clear data button
