@@ -444,6 +444,11 @@ function initializeEventListeners() {
         refreshSyncBtn.addEventListener('click', manualSync);
     }
     
+    const forceRefreshBtn = document.getElementById('force-refresh-btn');
+    if (forceRefreshBtn) {
+        forceRefreshBtn.addEventListener('click', forceRefresh);
+    }
+    
     // Clear data button
     const clearDataBtn = document.getElementById('clear-data-btn');
     if (clearDataBtn) {
