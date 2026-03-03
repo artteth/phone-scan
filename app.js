@@ -147,6 +147,7 @@ async function syncWithGoogleSheets() {
 
 function forceRefresh() {
     console.log('Force refresh - clearing local data and syncing');
+    alert('Force refresh clicked! Clearing data and syncing...');
     forceSync = true;
     // Clear local storage
     orders = {};
