@@ -380,6 +380,7 @@ function updateSyncStatus(status) {
 
 function manualSync() {
     console.log('Manual sync button clicked');
+    showToast('Начинаем загрузку данных...', 'info');
     syncWithGoogleSheets(true); // true = show loading overlay
 }
 
