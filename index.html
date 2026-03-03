@@ -57,7 +57,9 @@
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-dark); }
         .btn-secondary { background: var(--secondary); color: white; }
-        .btn-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .btn-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; margin-right: 8px; }
+        .btn.loading { position: relative; pointer-events: none; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .btn-secondary:hover { background: #475569; }
         .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
@@ -155,7 +157,7 @@
     <div class="app-container">
         <div id="scanner-page" class="page active">
             <header class="header">
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v12</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v13</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
