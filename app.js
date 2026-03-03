@@ -72,18 +72,29 @@ async function syncWithGoogleSheets() {
     
     isSyncing = true;
     updateSyncStatus('syncing');
+    console.log('Starting sync from Google Sheets...');
     
     try {
-        const response = await fetch(GOOGLE_SHEETS_URL + '?action=getData', {
+        const url = GOOGLE_SHEETS_URL + '?action=getData';
+        console.log('Fetching from:', url);
+        
+        const response = await fetch(url, {
             method: 'GET',
             mode: 'cors'
         });
         
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error('Network response was not ok: ' + response.status);
         }
         
         const data = await response.json();
+        console.log('Received data:', data);
+        
+        if (data.error) {
+            throw new Error('Server error: ' + data.error);
+        }
         
         if (data && data.orders) {
             // Merge data from Google Sheets with local data
@@ -95,16 +106,20 @@ async function syncWithGoogleSheets() {
             }
             
             saveData();
-            console.log('Data synced from Google Sheets');
+            renderRecentScans();
+            renderOrdersList();
+            console.log('Data synced from Google Sheets successfully');
         }
         
         lastSyncTime = new Date().toISOString();
         localStorage.setItem(SYNC_STATUS_KEY, lastSyncTime);
         updateSyncStatus('success');
+        showToast('Данные синхронизированы', 'success');
         
     } catch (error) {
         console.error('Error syncing with Google Sheets:', error);
         updateSyncStatus('error');
+        showToast('Ошибка синхронизации: ' + error.message, 'error');
     } finally {
         isSyncing = false;
     }
@@ -115,10 +130,12 @@ async function syncToGoogleSheets() {
     
     isSyncing = true;
     updateSyncStatus('syncing');
+    console.log('Starting sync to Google Sheets...');
     
     try {
         // Convert orders to array format for Google Sheets
         const sheetsData = convertOrdersToSheetsFormat();
+        console.log('Sending data:', JSON.stringify({ action: 'saveData', data: sheetsData }));
         
         const response = await fetch(GOOGLE_SHEETS_URL, {
             method: 'POST',
@@ -132,20 +149,28 @@ async function syncToGoogleSheets() {
             })
         });
         
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error('Network response was not ok: ' + response.status);
         }
         
         const result = await response.json();
-        console.log('Data synced to Google Sheets:', result);
+        console.log('Save result:', result);
+        
+        if (result.error) {
+            throw new Error('Server error: ' + result.error);
+        }
         
         lastSyncTime = new Date().toISOString();
         localStorage.setItem(SYNC_STATUS_KEY, lastSyncTime);
         updateSyncStatus('success');
+        console.log('Data synced to Google Sheets successfully');
         
     } catch (error) {
         console.error('Error syncing to Google Sheets:', error);
         updateSyncStatus('error');
+        showToast('Ошибка сохранения: ' + error.message, 'error');
     } finally {
         isSyncing = false;
     }

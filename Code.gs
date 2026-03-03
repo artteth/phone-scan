@@ -3,14 +3,18 @@
  * Deploy as Web App with:
  * - Execute as: Me
  * - Who has access: Anyone (or Anyone with Google account)
+ * 
+ * IMPORTANT: This script must be bound to a spreadsheet
+ * OR update SPREADSHEET_ID below to your spreadsheet ID
  */
 
 const SHEET_NAME = 'Data';
-const SCRIPT_PROP = PropertiesService.getScriptProperties();
+const SPREADSHEET_ID = '1Bp6c3Ws8rTvj2TW7YxiAreyyZ8WSdX9cXj3M9C48AOM'; // Your spreadsheet ID
 
 function setup() {
-  const doc = SpreadsheetApp.getActiveSpreadsheet();
-  SCRIPT_PROP.setProperty('key', doc.getId());
+  // Run this once to verify connection
+  const sheet = getSheet();
+  Logger.log('Script connected to: ' + sheet.getParent().getName());
 }
 
 function doGet(e) {
@@ -155,7 +159,8 @@ function saveData(data) {
 }
 
 function getSheet() {
-  const doc = SpreadsheetApp.openById(SCRIPT_PROP.getProperty('key'));
+  // Use the spreadsheet ID directly
+  const doc = SpreadsheetApp.openById(SPREADSHEET_ID);
   
   let sheet = doc.getSheetByName(SHEET_NAME);
   
