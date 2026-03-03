@@ -317,9 +317,24 @@
     function openScanner() {
       document.getElementById('scanner-modal').classList.add('active');
       if (!html5QrcodeScanner) {
-        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { 
+          fps: 10, 
+          qrbox: { width: 250, height: 250 },
+          supportedScanTypes: [],
+          rememberLastUsedCamera: true
+        }, false);
       }
       html5QrcodeScanner.render(handleQRCodeScan, (error) => console.log(error));
+      
+      // Hide "Scan an image file" button
+      setTimeout(() => {
+        const buttons = document.querySelectorAll('#qr-reader button');
+        buttons.forEach(btn => {
+          if (btn.textContent.includes('Image') || btn.textContent.includes('file')) {
+            btn.style.display = 'none';
+          }
+        });
+      }, 500);
     }
     function closeScanner() {
       document.getElementById('scanner-modal').classList.remove('active');
