@@ -1,9 +1,15 @@
 /**
  * Приложение для инвентаризации рулонов ткани
  * Сканирование QR-кодов, запись измерений, управление заказами
+ * ИНТЕГРАЦИЯ С GOOGLE TABLES
  */
 
-// ===== Constants =====
+// ===== CONFIGURATION =====
+const GOOGLE_SHEET_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE'; // Замените на ваш URL
+const USE_GOOGLE_SHEETS = true; // Включить интеграцию с Google Sheets
+const USE_LOCAL_STORAGE = !USE_GOOGLE_SHEETS; // Fallback to localStorage
+
+// ===== Constants (Local Storage) =====
 const STORAGE_KEY = 'fabric_inventory_data';
 const RECENT_SCANS_KEY = 'recent_scans';
 
@@ -20,24 +26,162 @@ let recentScans = [];
 let currentOrderId = null;
 let currentRollNumber = null;
 let html5QrcodeScanner = null;
+let isOnline = false;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
-    loadData();
     initializeEventListeners();
-    renderRecentScans();
-    renderQRCodePage();
     
-    // Initialize test data if empty
-    if (Object.keys(orders).length === 0) {
-        initializeTestData();
+    if (USE_GOOGLE_SHEETS && GOOGLE_SHEET_URL !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+        // Initialize with Google Sheets
+        initializeGoogleSheets();
+    } else {
+        // Fallback to localStorage
+        console.log('Using localStorage mode');
+        loadDataLocal();
+        initializeTestDataLocal();
+        renderOrdersList();
+        renderRecentScans();
+        renderQRCodePage();
     }
-    
-    renderOrdersList();
 });
 
-// ===== Data Management =====
-function loadData() {
+// ===== Google Sheets Initialization =====
+async function initializeGoogleSheets() {
+    showToast('Подключение к Google Sheets...', 'info');
+    
+    try {
+        await loadDataFromGoogleSheets();
+        renderOrdersList();
+        renderRecentScans();
+        renderQRCodePage();
+        showToast('Подключено к Google Sheets', 'success');
+        isOnline = true;
+    } catch (error) {
+        console.error('Google Sheets error:', error);
+        showToast('Ошибка подключения. Используем локальное хранилище.', 'error');
+        loadDataLocal();
+        initializeTestDataLocal();
+        renderOrdersList();
+    }
+    
+    // Check connection periodically
+    setInterval(async () => {
+        if (USE_GOOGLE_SHEETS) {
+            try {
+                await syncWithGoogleSheets();
+                isOnline = true;
+            } catch (e) {
+                isOnline = false;
+            }
+            updateConnectionStatus();
+        }
+    }, 30000); // Every 30 seconds
+}
+
+function updateConnectionStatus() {
+    const statusEl = document.getElementById('connection-status');
+    if (statusEl) {
+        statusEl.textContent = isOnline ? '🟢 Онлайн' : '🔴 Офлайн';
+        statusEl.className = isOnline ? 'status-online' : 'status-offline';
+    }
+}
+
+// ===== Google Sheets API Functions =====
+async function loadDataFromGoogleSheets() {
+    const url = `${GOOGLE_SHEET_URL}?action=getOrders`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+        throw new Error('Failed to load from Google Sheets');
+    }
+    
+    const data = await response.json();
+    
+    if (data.orders) {
+        orders = {};
+        data.orders.forEach(order => {
+            orders[order.id] = order;
+        });
+    }
+    
+    // Load recent scans from localStorage (not in Google Sheets)
+    const storedScans = localStorage.getItem(RECENT_SCANS_KEY);
+    if (storedScans) {
+        recentScans = JSON.parse(storedScans);
+    }
+}
+
+async function syncWithGoogleSheets() {
+    // Silent sync - just check connection
+    const url = `${GOOGLE_SHEET_URL}?action=getOrders`;
+    const response = await fetch(url, { method: 'HEAD' });
+    return response.ok;
+}
+
+async function saveRollToGoogleSheets(orderId, rollNumber, factoryLength, measuredLength, shrinkage, status) {
+    const url = `${GOOGLE_SHEET_URL}?action=saveRoll`;
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            orderId,
+            rollNumber,
+            factoryLength,
+            measuredLength,
+            shrinkage,
+            status
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error('Failed to save to Google Sheets');
+    }
+    
+    return await response.json();
+}
+
+async function createOrderInGoogleSheets(orderId, totalRolls, rolls) {
+    const url = `${GOOGLE_SHEET_URL}?action=createOrder`;
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            orderId,
+            totalRolls,
+            rolls
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error('Failed to create order in Google Sheets');
+    }
+    
+    return await response.json();
+}
+
+async function deleteOrderFromGoogleSheets(orderId) {
+    const url = `${GOOGLE_SHEET_URL}?action=deleteOrder&orderId=${orderId}`;
+    
+    const response = await fetch(url, {
+        method: 'POST'
+    });
+    
+    if (!response.ok) {
+        throw new Error('Failed to delete order from Google Sheets');
+    }
+    
+    return await response.json();
+}
+
+// ===== Local Storage Functions (Fallback) =====
+function loadDataLocal() {
     const storedOrders = localStorage.getItem(STORAGE_KEY);
     const storedScans = localStorage.getItem(RECENT_SCANS_KEY);
     
@@ -50,49 +194,51 @@ function loadData() {
     }
 }
 
-function saveData() {
+function saveDataLocal() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
     localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(recentScans));
 }
 
-function initializeTestData() {
-    // Заказ 2020 - 5 рулонов
-    orders['2020'] = {
-        id: '2020',
-        totalRolls: 5,
-        rolls: [
-            { rollNumber: 1, factoryLength: 50, measuredLength: null, shrinkage: null, status: 'pending' },
-            { rollNumber: 2, factoryLength: 48, measuredLength: null, shrinkage: null, status: 'pending' },
-            { rollNumber: 3, factoryLength: 52, measuredLength: null, shrinkage: null, status: 'pending' },
-            { rollNumber: 4, factoryLength: 49, measuredLength: null, shrinkage: null, status: 'pending' },
-            { rollNumber: 5, factoryLength: 51, measuredLength: null, shrinkage: null, status: 'pending' }
-        ]
-    };
-    
-    // Заказ 2021 - 3 рулона
-    orders['2021'] = {
-        id: '2021',
-        totalRolls: 3,
-        rolls: [
-            { rollNumber: 1, factoryLength: 45, measuredLength: 43.5, shrinkage: 3.3, status: 'completed' },
-            { rollNumber: 2, factoryLength: 47, measuredLength: null, shrinkage: null, status: 'pending' },
-            { rollNumber: 3, factoryLength: 46, measuredLength: null, shrinkage: null, status: 'pending' }
-        ]
-    };
-    
-    // Заказ 2022 - 4 рулона
-    orders['2022'] = {
-        id: '2022',
-        totalRolls: 4,
-        rolls: [
-            { rollNumber: 1, factoryLength: 55, measuredLength: 53.8, shrinkage: 2.2, status: 'completed' },
-            { rollNumber: 2, factoryLength: 53, measuredLength: 51.5, shrinkage: 2.8, status: 'completed' },
-            { rollNumber: 3, factoryLength: 54, measuredLength: null, shrinkage: null, status: 'pending' },
-            { rollNumber: 4, factoryLength: 52, measuredLength: null, shrinkage: null, status: 'pending' }
-        ]
-    };
-    
-    saveData();
+function initializeTestDataLocal() {
+    if (Object.keys(orders).length === 0) {
+        // Заказ 2020 - 5 рулонов
+        orders['2020'] = {
+            id: '2020',
+            totalRolls: 5,
+            rolls: [
+                { rollNumber: 1, factoryLength: 50, measuredLength: null, shrinkage: null, status: 'pending' },
+                { rollNumber: 2, factoryLength: 48, measuredLength: null, shrinkage: null, status: 'pending' },
+                { rollNumber: 3, factoryLength: 52, measuredLength: null, shrinkage: null, status: 'pending' },
+                { rollNumber: 4, factoryLength: 49, measuredLength: null, shrinkage: null, status: 'pending' },
+                { rollNumber: 5, factoryLength: 51, measuredLength: null, shrinkage: null, status: 'pending' }
+            ]
+        };
+        
+        // Заказ 2021 - 3 рулона
+        orders['2021'] = {
+            id: '2021',
+            totalRolls: 3,
+            rolls: [
+                { rollNumber: 1, factoryLength: 45, measuredLength: 43.5, shrinkage: 3.3, status: 'completed' },
+                { rollNumber: 2, factoryLength: 47, measuredLength: null, shrinkage: null, status: 'pending' },
+                { rollNumber: 3, factoryLength: 46, measuredLength: null, shrinkage: null, status: 'pending' }
+            ]
+        };
+        
+        // Заказ 2022 - 4 рулона
+        orders['2022'] = {
+            id: '2022',
+            totalRolls: 4,
+            rolls: [
+                { rollNumber: 1, factoryLength: 55, measuredLength: 53.8, shrinkage: 2.2, status: 'completed' },
+                { rollNumber: 2, factoryLength: 53, measuredLength: 51.5, shrinkage: 2.8, status: 'completed' },
+                { rollNumber: 3, factoryLength: 54, measuredLength: null, shrinkage: null, status: 'pending' },
+                { rollNumber: 4, factoryLength: 52, measuredLength: null, shrinkage: null, status: 'pending' }
+            ]
+        };
+        
+        saveDataLocal();
+    }
 }
 
 // ===== Event Listeners =====
@@ -131,6 +277,25 @@ function initializeEventListeners() {
     
     // Search
     document.getElementById('order-search').addEventListener('input', handleSearch);
+    
+    // Sync button
+    const syncBtn = document.getElementById('sync-btn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', manualSync);
+    }
+}
+
+async function manualSync() {
+    if (USE_GOOGLE_SHEETS) {
+        showToast('Синхронизация...', 'info');
+        try {
+            await loadDataFromGoogleSheets();
+            renderOrdersList();
+            showToast('Синхронизация завершена', 'success');
+        } catch (error) {
+            showToast('Ошибка синхронизации', 'error');
+        }
+    }
 }
 
 // ===== Navigation =====
@@ -190,7 +355,7 @@ function handleManualInput() {
     }
 }
 
-function processScannedCode(code) {
+async function processScannedCode(code) {
     // Parse code format: ORDER_ROLL (e.g., 2020_1)
     const parts = code.split('_');
     
@@ -222,7 +387,7 @@ function processScannedCode(code) {
             return;
         }
         
-        createOrder(orderId, rollCount, rollNumber);
+        await createOrder(orderId, rollCount, rollNumber);
     } else {
         // Check if roll exists
         const order = orders[orderId];
@@ -234,6 +399,46 @@ function processScannedCode(code) {
     
     // Open record modal
     openRecordModal(orderId, rollNumber);
+}
+
+async function createOrder(orderId, totalRolls, firstRollNumber = 1) {
+    // Create rolls array
+    const rolls = [];
+    for (let i = 1; i <= totalRolls; i++) {
+        rolls.push({
+            rollNumber: i,
+            factoryLength: null,
+            measuredLength: null,
+            shrinkage: null,
+            status: 'pending'
+        });
+    }
+    
+    const newOrder = {
+        id: orderId,
+        totalRolls,
+        rolls,
+        status: 'pending'
+    };
+    
+    orders[orderId] = newOrder;
+    
+    // Save to storage
+    if (USE_GOOGLE_SHEETS && isOnline) {
+        try {
+            await createOrderInGoogleSheets(orderId, totalRolls, rolls);
+            showToast('Заказ создан в Google Sheets', 'success');
+        } catch (error) {
+            console.error('Error creating order in Google Sheets:', error);
+            showToast('Заказ создан локально (ошибка синхронизации)', 'warning');
+        }
+    }
+    
+    if (USE_LOCAL_STORAGE || !USE_GOOGLE_SHEETS) {
+        saveDataLocal();
+    }
+    
+    renderOrdersList();
 }
 
 function addToRecentScans(code) {
@@ -248,7 +453,9 @@ function addToRecentScans(code) {
     // Keep only 5 recent
     recentScans = recentScans.slice(0, 5);
     
-    saveData();
+    // Save to localStorage (not synced to Google Sheets)
+    localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(recentScans));
+    
     renderRecentScans();
 }
 
@@ -282,7 +489,19 @@ function openRecordModal(orderId, rollNumber) {
     currentRollNumber = rollNumber;
     
     const order = orders[orderId];
-    const roll = order.rolls.find(r => r.rollNumber === rollNumber);
+    let roll = order.rolls.find(r => r.rollNumber === rollNumber);
+    
+    // If roll doesn't exist, create it
+    if (!roll) {
+        roll = {
+            rollNumber: rollNumber,
+            factoryLength: null,
+            measuredLength: null,
+            shrinkage: null,
+            status: 'pending'
+        };
+        order.rolls.push(roll);
+    }
     
     document.getElementById('record-order-id').textContent = orderId;
     document.getElementById('record-roll-number').textContent = rollNumber;
@@ -310,7 +529,7 @@ function handlePartialSave() {
     saveRollData(false);
 }
 
-function saveRollData(complete) {
+async function saveRollData(complete) {
     const factoryLength = parseFloat(document.getElementById('factory-length').value);
     const measuredLength = parseFloat(document.getElementById('measured-length').value) || null;
     const shrinkage = parseFloat(document.getElementById('shrinkage').value) || null;
@@ -354,9 +573,28 @@ function saveRollData(complete) {
     // Recalculate order status
     updateOrderStatus(order);
     
-    saveData();
+    // Save to storage
+    if (USE_GOOGLE_SHEETS && isOnline) {
+        try {
+            await saveRollToGoogleSheets(
+                currentOrderId,
+                currentRollNumber,
+                roll.factoryLength,
+                roll.measuredLength,
+                roll.shrinkage,
+                roll.status
+            );
+            showToast('Сохранено в Google Sheets', 'success');
+        } catch (error) {
+            console.error('Error saving to Google Sheets:', error);
+            showToast('Сохранено локально (ошибка синхронизации)', 'warning');
+            saveDataLocal();
+        }
+    } else {
+        saveDataLocal();
+    }
+    
     closeRecordModal();
-    showToast('Данные сохранены', 'success');
     
     // Refresh views
     if (document.getElementById('order-detail-page').classList.contains('active')) {
@@ -409,10 +647,10 @@ function renderOrdersList(filter = '') {
                     <span class="order-id">Заказ ${order.id}</span>
                     <span class="order-status ${statusClass}">${statusText}</span>
                 </div>
-                <div class="order-progress">${completedCount} из ${order.totalRolls} рулонов</div>
                 <div class="order-progress-bar">
                     <div class="order-progress-fill" style="width: ${progress}%"></div>
                 </div>
+                <div class="order-progress">${completedCount} / ${order.totalRolls} рулонов</div>
             </div>
         `;
     }).join('');
@@ -421,146 +659,168 @@ function renderOrdersList(filter = '') {
     container.querySelectorAll('.order-card').forEach(card => {
         card.addEventListener('click', () => {
             const orderId = card.dataset.orderId;
-            showOrderDetail(orderId);
+            showPage('order-detail-page');
+            renderOrderDetail(orderId);
         });
     });
 }
 
-function handleSearch(e) {
-    renderOrdersList(e.target.value);
-}
-
 // ===== Order Detail =====
-function showOrderDetail(orderId) {
-    currentOrderId = orderId;
-    document.getElementById('detail-order-id').textContent = orderId;
-    renderOrderDetail(orderId);
-    showPage('order-detail-page');
-}
-
 function renderOrderDetail(orderId) {
     const order = orders[orderId];
+    
+    if (!order) return;
+    
+    document.getElementById('detail-order-id').textContent = orderId;
+    
     const completedCount = order.rolls.filter(r => r.status === 'completed').length;
+    const progress = Math.round((completedCount / order.totalRolls) * 100);
     
-    document.getElementById('order-progress').textContent = `${completedCount}/${order.totalRolls} рулонов`;
+    document.getElementById('detail-progress').textContent = `${completedCount}/${order.totalRolls} (${progress}%)`;
     
-    let statusClass = 'pending';
-    let statusText = 'Ожидает';
-    if (order.status === 'in-progress') {
-        statusClass = 'in-progress';
-        statusText = 'В работе';
-    } else if (order.status === 'completed') {
-        statusClass = 'completed';
-        statusText = 'Завершён';
-    }
+    // Render rolls table
+    const tbody = document.getElementById('rolls-table-body');
     
-    const statusBadge = document.getElementById('order-status');
-    statusBadge.className = `summary-value status-badge ${statusClass}`;
-    statusBadge.textContent = statusText;
-    
-    const tbody = document.getElementById('rolls-tbody');
     tbody.innerHTML = order.rolls.map(roll => {
-        let statusClass = 'pending';
-        let statusText = 'Ожидает';
-        if (roll.status === 'partial') {
-            statusClass = 'partial';
-            statusText = 'Частично';
-        } else if (roll.status === 'completed') {
-            statusClass = 'completed';
-            statusText = 'Готов';
+        let statusBadge = '';
+        if (roll.status === 'completed') {
+            statusBadge = '<span class="status-badge status-completed">Готов</span>';
+        } else if (roll.status === 'partial') {
+            statusBadge = '<span class="status-badge status-partial">Частично</span>';
+        } else {
+            statusBadge = '<span class="status-badge status-pending">Ожидает</span>';
         }
         
         return `
-            <tr>
+            <tr data-roll="${roll.rollNumber}">
                 <td class="roll-roll-number">${roll.rollNumber}</td>
-                <td>${roll.factoryLength !== null ? roll.factoryLength + ' м' : '-'}</td>
-                <td>${roll.measuredLength !== null ? roll.measuredLength + ' м' : '-'}</td>
+                <td>${roll.factoryLength || '-'}</td>
+                <td>${roll.measuredLength || '-'}</td>
                 <td>${roll.shrinkage !== null ? roll.shrinkage + '%' : '-'}</td>
-                <td><span class="roll-status ${statusClass}">${statusText}</span></td>
-                <td>
-                    <button class="edit-roll-btn" data-roll="${roll.rollNumber}">Изменить</button>
-                </td>
+                <td>${statusBadge}</td>
             </tr>
         `;
     }).join('');
     
-    // Add click handlers for edit buttons
-    tbody.querySelectorAll('.edit-roll-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const rollNumber = parseInt(btn.dataset.roll);
+    // Add click handlers for editing
+    tbody.querySelectorAll('tr').forEach(row => {
+        row.addEventListener('click', () => {
+            const rollNumber = parseInt(row.dataset.roll);
             openRecordModal(orderId, rollNumber);
         });
     });
+    
+    // Update status badge
+    let detailStatus = document.getElementById('detail-status');
+    detailStatus.className = 'order-status ' + order.status;
+    if (order.status === 'pending') detailStatus.textContent = 'Ожидает';
+    else if (order.status === 'in-progress') detailStatus.textContent = 'В работе';
+    else detailStatus.textContent = 'Завершён';
 }
 
-// ===== New Order =====
+// ===== Search =====
+function handleSearch(e) {
+    const query = e.target.value;
+    renderOrdersList(query);
+}
+
+// ===== New Order Modal =====
 function openNewOrderModal() {
     document.getElementById('new-order-modal').classList.add('active');
-    document.getElementById('new-order-id').value = '';
-    document.getElementById('new-order-rolls').value = '';
 }
 
 function closeNewOrderModal() {
     document.getElementById('new-order-modal').classList.remove('active');
 }
 
-function handleNewOrderSubmit(e) {
+async function handleNewOrderSubmit(e) {
     e.preventDefault();
     
     const orderId = document.getElementById('new-order-id').value.trim();
     const totalRolls = parseInt(document.getElementById('new-order-rolls').value);
     
     if (!orderId || isNaN(totalRolls) || totalRolls < 1) {
-        showToast('Заполните все поля корректно', 'error');
+        showToast('Заполните все поля', 'error');
         return;
     }
     
-    createOrder(orderId, totalRolls);
+    if (orders[orderId]) {
+        showToast('Заказ уже существует', 'error');
+        return;
+    }
+    
+    await createOrder(orderId, totalRolls);
+    
     closeNewOrderModal();
+    document.getElementById('new-order-form').reset();
+    showPage('orders-page');
     showToast('Заказ создан', 'success');
-    renderOrdersList();
 }
 
-function createOrder(orderId, totalRolls, activeRollNumber = null) {
-    const rolls = [];
-    for (let i = 1; i <= totalRolls; i++) {
-        rolls.push({
-            rollNumber: i,
-            factoryLength: null,
-            measuredLength: null,
-            shrinkage: null,
-            status: 'pending'
-        });
-    }
-    
-    orders[orderId] = {
-        id: orderId,
-        totalRolls,
-        rolls,
-        status: 'pending'
-    };
-    
-    saveData();
-    
-    if (activeRollNumber) {
-        openRecordModal(orderId, activeRollNumber);
-    }
-}
-
-// ===== Add Roll =====
+// ===== Add Roll Modal =====
 function openAddRollModal() {
-    const rollNumber = orders[currentOrderId].rolls.length + 1;
-    openRecordModal(currentOrderId, rollNumber);
+    document.getElementById('add-roll-modal').classList.add('active');
 }
 
-// ===== QR Codes Page =====
+function closeAddRollModal() {
+    document.getElementById('add-roll-modal').classList.remove('active');
+}
+
+function handleAddRoll(e) {
+    e.preventDefault();
+    
+    const rollNumber = parseInt(document.getElementById('new-roll-number').value);
+    const factoryLength = parseFloat(document.getElementById('new-roll-factory-length').value);
+    
+    if (!currentOrderId || isNaN(rollNumber) || isNaN(factoryLength)) {
+        showToast('Заполните все поля', 'error');
+        return;
+    }
+    
+    const order = orders[currentOrderId];
+    
+    if (order.rolls.find(r => r.rollNumber === rollNumber)) {
+        showToast('Рулон уже существует', 'error');
+        return;
+    }
+    
+    order.rolls.push({
+        rollNumber,
+        factoryLength,
+        measuredLength: null,
+        shrinkage: null,
+        status: 'pending'
+    });
+    
+    order.totalRolls = Math.max(order.totalRolls, rollNumber);
+    
+    if (USE_GOOGLE_SHEETS && isOnline) {
+        saveRollToGoogleSheets(currentOrderId, rollNumber, factoryLength, null, null, 'pending')
+            .then(() => showToast('Рулон добавлен в Google Sheets', 'success'))
+            .catch(err => {
+                console.error(err);
+                showToast('Рулон добавлен локально', 'warning');
+            });
+    }
+    
+    if (USE_LOCAL_STORAGE || !USE_GOOGLE_SHEETS) {
+        saveDataLocal();
+    }
+    
+    renderOrderDetail(currentOrderId);
+    closeAddRollModal();
+    document.getElementById('add-roll-form').reset();
+    showToast('Рулон добавлен', 'success');
+}
+
+// ===== QR Code Generation =====
 function renderQRCodePage() {
     const container = document.getElementById('qr-codes-grid');
     
     container.innerHTML = TEST_CODES.map(code => `
         <div class="qr-code-item">
             <canvas id="qr-${code}"></canvas>
-            <div class="qr-code-label">${code}</div>
+            <span class="qr-code-label">${code}</span>
         </div>
     `).join('');
     
@@ -569,7 +829,7 @@ function renderQRCodePage() {
         const canvas = document.getElementById(`qr-${code}`);
         if (canvas) {
             QRCode.toCanvas(canvas, code, {
-                width: 120,
+                width: 150,
                 margin: 2,
                 color: {
                     dark: '#1e293b',
@@ -582,19 +842,30 @@ function renderQRCodePage() {
 
 // ===== Toast Notifications =====
 function showToast(message, type = 'info') {
-    let container = document.querySelector('.toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.className = 'toast-container';
-        document.body.appendChild(container);
-    }
+    const container = document.getElementById('toast-container');
     
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = `toast toast-${type}`;
     toast.textContent = message;
+    
     container.appendChild(toast);
     
     setTimeout(() => {
-        toast.remove();
+        toast.classList.add('toast-show');
+    }, 10);
+    
+    setTimeout(() => {
+        toast.classList.remove('toast-show');
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
     }, 3000);
 }
+
+// Initialize add roll form handler
+document.addEventListener('DOMContentLoaded', () => {
+    const addRollForm = document.getElementById('add-roll-form');
+    if (addRollForm) {
+        addRollForm.addEventListener('submit', handleAddRoll);
+    }
+});

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Сканер рулонов ткани</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --background: #f8fafc;
+      --surface: #ffffff;
+      --surface-hover: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--background); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--surface); position: relative; }
+    .page { display: none; min-height: 100vh; padding-bottom: 80px; }
+    .page.active { display: block; }
+    .header { background: var(--primary); color: white; padding: 20px 16px; text-align: center; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
+    .header h1 { font-size: 1.1rem; font-weight: 600; flex: 1; }
+    .back-btn, .sync-btn { background: transparent; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); }
+    .back-btn:hover, .sync-btn:hover { background: rgba(255,255,255,0.1); }
+    .back-btn { position: absolute; left: 16px; }
+    .sync-btn { position: absolute; right: 16px; font-size: 1rem; }
+    .main-content { padding: 20px 16px; }
+    .scan-section { background: var(--surface); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px; border: 1px solid var(--border); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; font-size: 0.95rem; font-weight: 500; border: none; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s ease; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--text-secondary); color: white; }
+    .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+    .btn-outline:hover { background: var(--primary); color: white; }
+    .btn-large { width: 100%; padding: 16px 24px; font-size: 1.1rem; }
+    .divider { display: flex; align-items: center; margin: 20px 0; color: var(--text-muted); }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .divider span { padding: 0 16px; font-size: 0.875rem; }
+    .manual-input { display: flex; gap: 8px; }
+    .manual-input .input { flex: 1; }
+    .input { width: 100%; padding: 12px 16px; font-size: 1rem; border: 2px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); transition: border-color 0.2s; }
+    .input:focus { outline: none; border-color: var(--primary); }
+    .recent-scans { margin-bottom: 24px; }
+    .recent-scans h3 { font-size: 1rem; color: var(--text-secondary); margin-bottom: 12px; }
+    .recent-list { display: flex; flex-direction: column; gap: 8px; }
+    .recent-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); cursor: pointer; border: 1px solid var(--border); }
+    .recent-item:hover { transform: translateX(4px); }
+    .recent-code { font-weight: 600; color: var(--primary); }
+    .recent-time { font-size: 0.8rem; color: var(--text-muted); }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem; }
+    .search-bar { margin-bottom: 16px; }
+    .orders-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+    .order-card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: pointer; border: 1px solid var(--border); }
+    .order-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .order-id { font-size: 1.25rem; font-weight: 700; }
+    .order-progress { font-size: 0.9rem; color: var(--text-secondary); }
+    .order-progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .order-progress-fill { height: 100%; background: var(--success); transition: width 0.3s; }
+    .order-status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
+    .order-status.pending { background: #fef3c7; color: #92400e; }
+    .order-status.in-progress { background: #dbeafe; color: #1e40af; }
+    .order-status.completed { background: #d1fae5; color: #065f46; }
+    .order-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .summary-card { background: var(--surface); border-radius: var(--radius); padding: 16px; text-align: center; border: 1px solid var(--border); }
+    .summary-label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+    .summary-value { font-size: 1.1rem; font-weight: 600; }
+    .rolls-table-container { background: var(--surface); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; border: 1px solid var(--border); }
+    .rolls-table { width: 100%; border-collapse: collapse; }
+    .rolls-table th, .rolls-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    .rolls-table th { background: var(--surface-hover); font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+    .rolls-table tr:last-child td { border-bottom: none; }
+    .rolls-table tr:hover td { background: var(--surface-hover); }
+    .roll-roll-number { font-weight: 600; color: var(--primary); }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 500; }
+    .status-badge.status-pending { background: #fef3c7; color: #92400e; }
+    .status-badge.status-partial { background: #dbeafe; color: #1e40af; }
+    .status-badge.status-completed { background: #d1fae5; color: #065f46; }
+    .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px; }
+    .modal.active { display: flex; }
+    .modal-content { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { font-size: 1.1rem; }
+    .close-btn { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted); padding: 4px; }
+    #record-form, #new-order-form, #add-roll-form { padding: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 6px; }
+    .form-value { font-size: 1.1rem; font-weight: 600; }
+    .action-buttons { display: flex; gap: 12px; margin-top: 20px; }
+    .action-buttons .btn { flex: 1; }
+    #qr-reader { padding: 16px; }
+    #toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { background: var(--text); color: white; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+    .toast.toast-show { opacity: 1; }
+    .toast.toast-success { background: var(--success); }
+    .toast.toast-error { background: var(--danger); }
+    .toast.toast-warning { background: var(--warning); }
+    .toast.toast-info { background: var(--primary); }
+    .connection-status { position: absolute; top: 50px; right: 16px; font-size: 0.75rem; padding: 4px 8px; border-radius: 10px; }
+    .status-online { background: #d1fae5; color: #065f46; }
+    .status-offline { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <button class="back-btn" id="back-btn" style="display:none">←</button>
+      <h1 id="page-title">Сканер рулонов ткани</h1>
+      <button class="sync-btn" id="sync-btn">🔄</button>
+    </header>
+    <div class="connection-status" id="connection-status">🟡 Загрузка...</div>
+
+    <div id="scanner-page" class="page active">
+      <div class="main-content">
+        <div class="scan-section">
+          <button class="btn btn-primary btn-large" id="scan-btn">📷 Сканировать QR-код</button>
+          <div class="divider"><span>или</span></div>
+          <div class="manual-input">
+            <input type="text" class="input" id="manual-code" placeholder="Введите код (например 2020_1)">
+            <button class="btn btn-primary" id="manual-submit">OK</button>
+          </div>
+        </div>
+        <div class="recent-scans">
+          <h3>Последние сканирования</h3>
+          <div class="recent-list" id="recent-list"><p class="empty-state">Пока нет сканирований</p></div>
+        </div>
+        <button class="btn btn-outline" id="view-orders-btn" style="width:100%">📋 Список заказов</button>
+      </div>
+    </div>
+
+    <div id="orders-page" class="page">
+      <div class="main-content">
+        <div class="search-bar"><input type="text" class="input" id="order-search" placeholder="Поиск заказа..."></div>
+        <div class="orders-list" id="orders-list"><p class="empty-state">Загрузка...</p></div>
+        <button class="btn btn-primary" id="add-order-btn" style="width:100%">+ Новый заказ</button>
+      </div>
+    </div>
+
+    <div id="order-detail-page" class="page">
+      <div class="main-content">
+        <div class="order-summary">
+          <div class="summary-card"><span class="summary-label">Заказ</span><span class="summary-value" id="detail-order-id">-</span></div>
+          <div class="summary-card"><span class="summary-label">Прогресс</span><span class="summary-value" id="detail-progress">-</span></div>
+        </div>
+        <div class="order-status" id="detail-status">Ожидает</div>
+        <div class="rolls-table-container">
+          <table class="rolls-table">
+            <thead><tr><th>Рулон</th><th>Завод</th><th>Факт</th><th>Усадка</th><th>Статус</th></tr></thead>
+            <tbody id="rolls-table-body"></tbody>
+          </table>
+        </div>
+        <button class="btn btn-secondary" id="add-roll-btn" style="width:100%">+ Добавить рулон</button>
+      </div>
+    </div>
+
+    <div id="scanner-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header"><h3>Сканирование</h3><button class="close-btn" id="close-scanner">✕</button></div>
+        <div id="qr-reader"></div>
+      </div>
+    </div>
+
+    <div id="record-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header"><h3>Запись данных</h3><button class="close-btn" id="close-record">✕</button></div>
+        <form id="record-form">
+          <div class="form-group"><label>Заказ</label><div class="form-value" id="record-order-id">-</div></div>
+          <div class="form-group"><label>Рулон №</label><div class="form-value" id="record-roll-number">-</div></div>
+          <div class="form-group"><label>Заводской метраж (м)</label><input type="number" class="input" id="factory-length" step="0.1" required></div>
+          <div class="form-group"><label>Измеренный метраж (м)</label><input type="number" class="input" id="measured-length" step="0.1"></div>
+          <div class="form-group"><label>Усадка (%)</label><input type="number" class="input" id="shrinkage" step="0.1"></div>
+          <div class="action-buttons">
+            <button type="submit" class="btn btn-primary">Записать</button>
+            <button type="button" class="btn btn-outline" id="save-partial">Частично</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="new-order-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header"><h3>Новый заказ</h3><button class="close-btn" id="close-new-order">✕</button></div>
+        <form id="new-order-form">
+          <div class="form-group"><label>Номер заказа</label><input type="text" class="input" id="new-order-id" required></div>
+          <div class="form-group"><label>Количество рулонов</label><input type="number" class="input" id="new-order-rolls" min="1" value="5" required></div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Создать</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="add-roll-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header"><h3>Добавить рулон</h3><button class="close-btn" id="close-add-roll">✕</button></div>
+        <form id="add-roll-form">
+          <div class="form-group"><label>Номер рулона</label><input type="number" class="input" id="new-roll-number" min="1" required></div>
+          <div class="form-group"><label>Заводской метраж (м)</label><input type="number" class="input" id="new-roll-factory-length" step="0.1" required></div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Добавить</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast-container"></div>
+  </div>
+
+  <script>
+    // ===== CONFIGURATION =====
+    // ЗАМЕНИТЕ НА ВАШ GOOGLE APPS SCRIPT URL!
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+    
+    let orders = {};
+    let recentScans = [];
+    let currentOrderId = null;
+    let currentRollNumber = null;
+    let html5QrcodeScanner = null;
+
+    // ===== Initialization =====
+    document.addEventListener('DOMContentLoaded', async () => {
+      initializeEventListeners();
+      await loadData();
+      renderRecentScans();
+      renderOrdersList();
+    });
+
+    // ===== API Functions =====
+    async function loadData() {
+      updateConnectionStatus('Загрузка...', false);
+      try {
+        const response = await fetch(GOOGLE_SCRIPT_URL + '?action=getOrders');
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
+        if (data.orders) {
+          orders = {};
+          data.orders.forEach(order => { orders[order.id] = order; });
+        }
+        updateConnectionStatus('🟢 Подключено', true);
+        renderOrdersList();
+      } catch (error) {
+        console.error('Error:', error);
+        updateConnectionStatus('🔴 Ошибка подключения', false);
+        showToast('Не удалось подключиться к Google Таблице', 'error');
+      }
+    }
+
+    function updateConnectionStatus(text, online) {
+      const el = document.getElementById('connection-status');
+      el.textContent = text;
+      el.className = 'connection-status ' + (online ? 'status-online' : 'status-offline');
+    }
+
+    async function saveRollToSheet(orderId, rollNumber, factoryLength, measuredLength, shrinkage, status) {
+      const response = await fetch(GOOGLE_SCRIPT_URL + '?action=saveRoll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, rollNumber, factoryLength, measuredLength, shrinkage, status })
+      });
+      return response.ok;
+    }
+
+    async function createOrderInSheet(orderId, totalRolls, rolls) {
+      const response = await fetch(GOOGLE_SCRIPT_URL + '?action=createOrder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, totalRolls, rolls })
+      });
+      return response.ok;
+    }
+
+    // ===== Event Listeners =====
+    function initializeEventListeners() {
+      document.getElementById('scan-btn').addEventListener('click', openScanner);
+      document.getElementById('manual-submit').addEventListener('click', handleManualInput);
+      document.getElementById('manual-code').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleManualInput(); });
+      document.getElementById('view-orders-btn').addEventListener('click', () => showPage('orders-page'));
+      document.getElementById('back-btn').addEventListener('click', goBack);
+      document.getElementById('close-scanner').addEventListener('click', closeScanner);
+      document.getElementById('close-record').addEventListener('click', () => document.getElementById('record-modal').classList.remove('active'));
+      document.getElementById('record-form').addEventListener('submit', handleRecordSubmit);
+      document.getElementById('save-partial').addEventListener('click', handlePartialSave);
+      document.getElementById('add-order-btn').addEventListener('click', () => document.getElementById('new-order-modal').classList.add('active'));
+      document.getElementById('close-new-order').addEventListener('click', () => document.getElementById('new-order-modal').classList.remove('active'));
+      document.getElementById('new-order-form').addEventListener('submit', handleNewOrderSubmit);
+      document.getElementById('add-roll-btn').addEventListener('click', () => document.getElementById('add-roll-modal').classList.add('active'));
+      document.getElementById('close-add-roll').addEventListener('click', () => document.getElementById('add-roll-modal').classList.remove('active'));
+      document.getElementById('add-roll-form').addEventListener('submit', handleAddRoll);
+      document.getElementById('order-search').addEventListener('input', (e) => renderOrdersList(e.target.value));
+      document.getElementById('sync-btn').addEventListener('click', async () => { showToast('Синхронизация...', 'info'); await loadData(); showToast('Готово', 'success'); });
+    }
+
+    // ===== Navigation =====
+    const pageHistory = ['scanner-page'];
+    function showPage(pageId) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+      document.getElementById('back-btn').style.display = pageId !== 'scanner-page' ? 'block' : 'none';
+      document.getElementById('page-title').textContent = pageId === 'order-detail-page' ? 'Заказ ' + currentOrderId : (pageId === 'orders-page' ? 'Список заказов' : 'Сканер рулонов ткани');
+      if (!pageHistory.includes(pageId)) pageHistory.push(pageId);
+      if (pageId === 'orders-page') renderOrdersList();
+    }
+    function goBack() { if (pageHistory.length > 1) { pageHistory.pop(); showPage(pageHistory[pageHistory.length - 1]); } }
+
+    // ===== Scanner =====
+    function openScanner() {
+      document.getElementById('scanner-modal').classList.add('active');
+      if (!html5QrcodeScanner) {
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+      }
+      html5QrcodeScanner.render(handleQRCodeScan, (error) => console.log(error));
+    }
+    function closeScanner() {
+      document.getElementById('scanner-modal').classList.remove('active');
+      if (html5QrcodeScanner) { html5QrcodeScanner.clear().catch(err => console.log(err)); }
+    }
+    function handleQRCodeScan(decodedText) { closeScanner(); processScannedCode(decodedText); }
+    function handleManualInput() {
+      const code = document.getElementById('manual-code').value.trim();
+      if (code) { processScannedCode(code); document.getElementById('manual-code').value = ''; }
+    }
+
+    async function processScannedCode(code) {
+      const parts = code.split('_');
+      if (parts.length !== 2) { showToast('Неверный формат. Используйте: ЗАКАЗ_РУЛОН', 'error'); return; }
+      const orderId = parts[0];
+      const rollNumber = parseInt(parts[1]);
+      if (isNaN(rollNumber)) { showToast('Неверный номер рулона', 'error'); return; }
+      addToRecentScans(code);
+      await loadData();
+      if (!orders[orderId]) {
+        const totalRolls = prompt('Заказ не найден. Введите количество рулонов:', '5');
+        if (!totalRolls) return;
+        await createOrder(orderId, parseInt(totalRolls), rollNumber);
+      }
+      openRecordModal(orderId, rollNumber);
+    }
+
+    // ===== Recent Scans =====
+    function addToRecentScans(code) {
+      const timestamp = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      recentScans = recentScans.filter(s => s.code !== code);
+      recentScans.unshift({ code, timestamp });
+      recentScans = recentScans.slice(0, 5);
+      renderRecentScans();
+      localStorage.setItem('recentScans', JSON.stringify(recentScans));
+    }
+    function renderRecentScans() {
+      const stored = localStorage.getItem('recentScans');
+      if (stored) recentScans = JSON.parse(stored);
+      const container = document.getElementById('recent-list');
+      if (recentScans.length === 0) { container.innerHTML = '<p class="empty-state">Пока нет сканирований</p>'; return; }
+      container.innerHTML = recentScans.map(scan => `<div class="recent-item" data-code="${scan.code}"><span class="recent-code">${scan.code}</span><span class="recent-time">${scan.timestamp}</span></div>`).join('');
+      container.querySelectorAll('.recent-item').forEach(item => item.addEventListener('click', () => processScannedCode(item.dataset.code)));
+    }
+
+    // ===== Orders List =====
+    function renderOrdersList(filter = '') {
+      const container = document.getElementById('orders-list');
+      const filtered = Object.values(orders).filter(o => o.id.includes(filter));
+      if (filtered.length === 0) { container.innerHTML = '<p class="empty-state">Заказов не найдено</p>'; return; }
+      container.innerHTML = filtered.map(order => {
+        const completed = order.rolls.filter(r => r.status === 'completed').length;
+        const progress = (completed / order.totalRolls) * 100;
+        const statusClass = order.status === 'completed' ? 'completed' : order.status === 'in-progress' ? 'in-progress' : 'pending';
+        const statusText = order.status === 'completed' ? 'Завершён' : order.status === 'in-progress' ? 'В работе' : 'Ожидает';
+        return `<div class="order-card" data-order-id="${order.id}"><div class="order-header"><span class="order-id">Заказ ${order.id}</span><span class="order-status ${statusClass}">${statusText}</span></div><div class="order-progress-bar"><div class="order-progress-fill" style="width: ${progress}%"></div></div><div class="order-progress">${completed} / ${order.totalRolls} рулонов</div></div>`;
+      }).join('');
+      container.querySelectorAll('.order-card').forEach(card => card.addEventListener('click', () => { currentOrderId = card.dataset.orderId; showPage('order-detail-page'); renderOrderDetail(currentOrderId); }));
+    }
+
+    // ===== Order Detail =====
+    function renderOrderDetail(orderId) {
+      const order = orders[orderId];
+      if (!order) return;
+      document.getElementById('detail-order-id').textContent = orderId;
+      const completed = order.rolls.filter(r => r.status === 'completed').length;
+      const progress = Math.round((completed / order.totalRolls) * 100);
+      document.getElementById('detail-progress').textContent = `${completed}/${order.totalRolls} (${progress}%)`;
+      const statusEl = document.getElementById('detail-status');
+      statusEl.className = 'order-status ' + order.status;
+      statusEl.textContent = order.status === 'completed' ? 'Завершён' : order.status === 'in-progress' ? 'В работе' : 'Ожидает';
+      const tbody = document.getElementById('rolls-table-body');
+      tbody.innerHTML = order.rolls.map(roll => {
+        const statusBadge = roll.status === 'completed' ? 'Готов' : roll.status === 'partial' ? 'Частично' : 'Ожидает';
+        const statusClass = roll.status === 'completed' ? 'status-completed' : roll.status === 'partial' ? 'status-partial' : 'status-pending';
+        return `<tr data-roll="${roll.rollNumber}"><td class="roll-roll-number">${roll.rollNumber}</td><td>${roll.factoryLength || '-'}</td><td>${roll.measuredLength || '-'}</td><td>${roll.shrinkage !== null ? roll.shrinkage + '%' : '-'}</td><td><span class="status-badge ${statusClass}">${statusBadge}</span></td></tr>`;
+      }).join('');
+      tbody.querySelectorAll('tr').forEach(row => row.addEventListener('click', () => openRecordModal(orderId, parseInt(row.dataset.roll))));
+    }
+
+    // ===== Record Modal =====
+    function openRecordModal(orderId, rollNumber) {
+      currentOrderId = orderId; currentRollNumber = rollNumber;
+      const order = orders[orderId];
+      let roll = order.rolls.find(r => r.rollNumber === rollNumber);
+      if (!roll) { roll = { rollNumber, factoryLength: null, measuredLength: null, shrinkage: null, status: 'pending' }; order.rolls.push(roll); }
+      document.getElementById('record-order-id').textContent = orderId;
+      document.getElementById('record-roll-number').textContent = rollNumber;
+      document.getElementById('factory-length').value = roll.factoryLength || '';
+      document.getElementById('measured-length').value = roll.measuredLength || '';
+      document.getElementById('shrinkage').value = roll.shrinkage || '';
+      document.getElementById('record-modal').classList.add('active');
+    }
+
+    async function handleRecordSubmit(e) { e.preventDefault(); await saveRollData(true); }
+    async function handlePartialSave() { await saveRollData(false); }
+
+    async function saveRollData(complete) {
+      const factoryLength = parseFloat(document.getElementById('factory-length').value);
+      const measuredLength = parseFloat(document.getElementById('measured-length').value) || null;
+      const shrinkage = parseFloat(document.getElementById('shrinkage').value) || null;
+      if (isNaN(factoryLength)) { showToast('Введите заводской метраж', 'error'); return; }
+      const order = orders[currentOrderId];
+      let roll = order.rolls.find(r => r.rollNumber === currentRollNumber);
+      if (!roll) { roll = { rollNumber: currentRollNumber, factoryLength, measuredLength: null, shrinkage: null, status: 'pending' }; order.rolls.push(roll); }
+      roll.factoryLength = factoryLength;
+      if (measuredLength !== null && shrinkage !== null) { roll.measuredLength = measuredLength; roll.shrinkage = shrinkage; roll.status = 'completed'; }
+      else if (measuredLength !== null || shrinkage !== null) { roll.measuredLength = measuredLength; roll.shrinkage = shrinkage; roll.status = 'partial'; }
+      else { roll.status = 'pending'; }
+      const completed = order.rolls.filter(r => r.status === 'completed').length;
+      if (completed === order.totalRolls) order.status = 'completed';
+      else if (completed > 0) order.status = 'in-progress';
+      else order.status = 'pending';
+      const saved = await saveRollToSheet(currentOrderId, currentRollNumber, roll.factoryLength, roll.measuredLength, roll.shrinkage, roll.status);
+      document.getElementById('record-modal').classList.remove('active');
+      showToast(saved ? 'Сохранено в Google Таблицу' : 'Ошибка сохранения', saved ? 'success' : 'error');
+      renderOrderDetail(currentOrderId);
+      renderOrdersList();
+    }
+
+    // ===== New Order =====
+    async function createOrder(orderId, totalRolls, firstRollNumber = 1) {
+      const rolls = [];
+      for (let i = 1; i <= totalRolls; i++) { rolls.push({ rollNumber: i, factoryLength: null, measuredLength: null, shrinkage: null, status: 'pending' }); }
+      orders[orderId] = { id: orderId, totalRolls, rolls, status: 'pending' };
+      await createOrderInSheet(orderId, totalRolls, rolls);
+      renderOrdersList();
+    }
+
+    async function handleNewOrderSubmit(e) {
+      e.preventDefault();
+      const orderId = document.getElementById('new-order-id').value.trim();
+      const totalRolls = parseInt(document.getElementById('new-order-rolls').value);
+      if (!orderId || isNaN(totalRolls)) { showToast('Заполните все поля', 'error'); return; }
+      if (orders[orderId]) { showToast('Заказ уже существует', 'error'); return; }
+      await createOrder(orderId, totalRolls);
+      document.getElementById('new-order-modal').classList.remove('active');
+      document.getElementById('new-order-form').reset();
+      showPage('orders-page');
+      showToast('Заказ создан', 'success');
+    }
+
+    async function handleAddRoll(e) {
+      e.preventDefault();
+      const rollNumber = parseInt(document.getElementById('new-roll-number').value);
+      const factoryLength = parseFloat(document.getElementById('new-roll-factory-length').value);
+      if (!currentOrderId || isNaN(rollNumber) || isNaN(factoryLength)) { showToast('Заполните все поля', 'error'); return; }
+      const order = orders[currentOrderId];
+      if (order.rolls.find(r => r.rollNumber === rollNumber)) { showToast('Рулон уже существует', 'error'); return; }
+      order.rolls.push({ rollNumber, factoryLength, measuredLength: null, shrinkage: null, status: 'pending' });
+      order.totalRolls = Math.max(order.totalRolls, rollNumber);
+      await saveRollToSheet(currentOrderId, rollNumber, factoryLength, null, null, 'pending');
+      renderOrderDetail(currentOrderId);
+      document.getElementById('add-roll-modal').classList.remove('active');
+      document.getElementById('add-roll-form').reset();
+      showToast('Рулон добавлен', 'success');
+    }
+
+    // ===== Toast =====
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add('toast-show'), 10);
+      setTimeout(() => { toast.classList.remove('toast-show'); setTimeout(() => toast.remove(), 300); }, 3000);
+    }
+  </script>
+</body>
+</html>
