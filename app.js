@@ -88,6 +88,12 @@ async function syncWithGoogleSheets() {
         if (data && data.orders) {
             // Merge data from Google Sheets with local data
             mergeOrdersData(data.orders);
+            
+            // Also sync recent scans
+            if (data.recentScans && Array.isArray(data.recentScans)) {
+                recentScans = data.recentScans;
+            }
+            
             saveData();
             console.log('Data synced from Google Sheets');
         }
@@ -146,11 +152,11 @@ async function syncToGoogleSheets() {
 }
 
 function convertOrdersToSheetsFormat() {
-    const sheetsData = [];
+    const ordersData = [];
     
     Object.values(orders).forEach(order => {
         order.rolls.forEach(roll => {
-            sheetsData.push({
+            ordersData.push({
                 orderId: order.id,
                 rollNumber: roll.rollNumber,
                 totalRolls: order.totalRolls,
@@ -162,7 +168,7 @@ function convertOrdersToSheetsFormat() {
         });
     });
     
-    return sheetsData;
+    return { orders: ordersData, recentScans: recentScans };
 }
 
 function mergeOrdersData(sheetsData) {

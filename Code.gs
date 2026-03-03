@@ -55,6 +55,7 @@ function getData() {
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const orders = {};
+  const recentScans = [];
   
   // Skip header row
   for (let i = 1; i < data.length; i++) {
@@ -62,6 +63,15 @@ function getData() {
     const orderId = row[0];  // Column A: Order ID
     
     if (!orderId) continue;
+    
+    // Check if this is a recent scan entry (starts with SCAN:)
+    if (orderId.startsWith('SCAN:')) {
+      recentScans.push({
+        code: orderId.substring(5),
+        timestamp: row[1] || ''
+      });
+      continue;
+    }
     
     if (!orders[orderId]) {
       orders[orderId] = {
@@ -92,7 +102,7 @@ function getData() {
     });
   }
   
-  return { orders: orders };
+  return { orders: orders, recentScans: recentScans };
 }
 
 function saveData(data) {
@@ -107,18 +117,38 @@ function saveData(data) {
   const headers = ['Order ID', 'Roll Number', 'Factory Length', 'Measured Length', 'Shrinkage', 'Status'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   
-  // Write data
-  if (data && data.length > 0) {
-    const rows = data.map(item => [
-      item.orderId,
-      item.rollNumber,
-      item.factoryLength || '',
-      item.measuredLength || '',
-      item.shrinkage || '',
-      item.status || 'pending'
-    ]);
-    
-    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  const allRows = [];
+  
+  // Write orders data
+  if (data.orders && data.orders.length > 0) {
+    data.orders.forEach(item => {
+      allRows.push([
+        item.orderId,
+        item.rollNumber,
+        item.factoryLength || '',
+        item.measuredLength || '',
+        item.shrinkage || '',
+        item.status || 'pending'
+      ]);
+    });
+  }
+  
+  // Write recent scans
+  if (data.recentScans && data.recentScans.length > 0) {
+    data.recentScans.forEach(scan => {
+      allRows.push([
+        'SCAN:' + scan.code,
+        scan.timestamp,
+        '',
+        '',
+        '',
+        ''
+      ]);
+    });
+  }
+  
+  if (allRows.length > 0) {
+    sheet.getRange(2, 1, allRows.length, headers.length).setValues(allRows);
   }
   
   return { success: true, message: 'Data saved successfully' };
