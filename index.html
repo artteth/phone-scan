@@ -235,7 +235,10 @@
                     <input type="text" id="order-search" placeholder="Поиск по номеру заказа..." class="input">
                 </div>
                 <div id="orders-list" class="orders-list"></div>
-                <button id="add-order-btn" class="btn btn-primary">+ Новый заказ</button>
+                <div style="display: flex; gap: 12px;">
+                    <button id="add-order-btn" class="btn btn-primary" style="flex:1;">+ Новый заказ</button>
+                    <button id="clear-data-btn" class="btn btn-secondary" title="Очистить все данные">🗑️</button>
+                </div>
             </main>
         </div>
         <div id="order-detail-page" class="page">

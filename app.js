@@ -33,13 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderRecentScans();
     renderQRCodePage();
     
-    // Initialize test data if empty and not synced before
-    if (Object.keys(orders).length === 0) {
-        initializeTestData();
-    }
-    
-    renderOrdersList();
-    
     // Show initial sync status
     updateSyncStatus(lastSyncTime ? 'success' : '');
 });
@@ -61,9 +54,6 @@ function loadData() {
     if (storedSyncTime) {
         lastSyncTime = storedSyncTime;
     }
-    
-    // Auto-sync with Google Sheets on load
-    syncWithGoogleSheets();
 }
 
 function saveData() {
@@ -284,6 +274,20 @@ function manualSync() {
     syncWithGoogleSheets();
 }
 
+function clearAllData() {
+    if (confirm('Вы уверены? Все данные будут удалены.')) {
+        orders = {};
+        recentScans = [];
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(RECENT_SCANS_KEY);
+        localStorage.removeItem(SYNC_STATUS_KEY);
+        lastSyncTime = null;
+        renderOrdersList();
+        renderRecentScans();
+        showToast('Все данные очищены', 'success');
+    }
+}
+
 function initializeTestData() {
     // Заказ 2020 - 5 рулонов
     orders['2020'] = {
@@ -370,6 +374,12 @@ function initializeEventListeners() {
     const refreshSyncBtn = document.getElementById('refresh-sync-btn');
     if (refreshSyncBtn) {
         refreshSyncBtn.addEventListener('click', manualSync);
+    }
+    
+    // Clear data button
+    const clearDataBtn = document.getElementById('clear-data-btn');
+    if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', clearAllData);
     }
 }
 
