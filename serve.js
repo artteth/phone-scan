@@ -45,7 +45,12 @@ const server = http.createServer((req, res) => {
             if (err.code === 'ENOENT') {
                 // Serve index.html for SPA routes
                 fs.readFile(path.join(__dirname, 'index.html'), (err, content) => {
-                    res.writeHead(200, { 'Content-Type': 'text/html' });
+                    res.writeHead(200, { 
+                        'Content-Type': 'text/html',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    });
                     res.end(content, 'utf-8');
                 });
             } else {
@@ -53,7 +58,12 @@ const server = http.createServer((req, res) => {
                 res.end('Server Error: ' + err.code);
             }
         } else {
-            res.writeHead(200, { 'Content-Type': contentType });
+            res.writeHead(200, { 
+                'Content-Type': contentType,
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
             res.end(content, 'utf-8');
         }
     });
