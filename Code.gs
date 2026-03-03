@@ -26,7 +26,28 @@ function doPost(e) {
 }
 
 function handleRequest(e) {
-  const action = e.parameter.action || (e.postData ? JSON.parse(e.postData.contents).action : null);
+  let action = e.parameter.action;
+  let postData = null;
+  
+  // Try to get action from POST body
+  if (e.postData && e.postData.contents) {
+    try {
+      const parsed = JSON.parse(e.postData.contents);
+      if (parsed.action) action = parsed.action;
+      if (parsed.data) postData = parsed.data;
+    } catch (err) {
+      // Couldn't parse POST body
+    }
+  }
+  
+  // For GET requests, data might be in the 'data' parameter
+  if (!postData && e.parameter.data) {
+    try {
+      postData = JSON.parse(decodeURIComponent(e.parameter.data));
+    } catch (err) {
+      // Couldn't parse data parameter
+    }
+  }
   
   try {
     let result;
@@ -36,8 +57,7 @@ function handleRequest(e) {
         result = getData();
         break;
       case 'saveData':
-        const postData = JSON.parse(e.postData.contents);
-        result = saveData(postData.data);
+        result = saveData(postData);
         break;
       default:
         result = { error: 'Unknown action' };
