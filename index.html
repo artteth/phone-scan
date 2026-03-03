@@ -237,8 +237,9 @@
     async function loadData() {
       updateConnectionStatus('Загрузка...', false);
       try {
-        const response = await fetch(GOOGLE_SCRIPT_URL + '?action=getOrders');
-        if (!response.ok) throw new Error('Network error');
+        const response = await fetch(GOOGLE_SCRIPT_URL + '?action=getOrders', {
+          redirect: 'follow'
+        });
         const data = await response.json();
         if (data.orders) {
           orders = {};
@@ -262,6 +263,7 @@
     async function saveRollToSheet(orderId, rollNumber, factoryLength, measuredLength, shrinkage, status) {
       const response = await fetch(GOOGLE_SCRIPT_URL + '?action=saveRoll', {
         method: 'POST',
+        redirect: 'follow',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, rollNumber, factoryLength, measuredLength, shrinkage, status })
       });
@@ -271,6 +273,7 @@
     async function createOrderInSheet(orderId, totalRolls, rolls) {
       const response = await fetch(GOOGLE_SCRIPT_URL + '?action=createOrder', {
         method: 'POST',
+        redirect: 'follow',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, totalRolls, rolls })
       });
