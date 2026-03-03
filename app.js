@@ -72,11 +72,28 @@ function saveData() {
 }
 
 // ===== Google Sheets Sync =====
-async function syncWithGoogleSheets() {
+// Loading overlay functions
+function showLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.add('active');
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
+async function syncWithGoogleSheets(showLoadingFlag = false) {
     if (isSyncing) return;
     
     isSyncing = true;
     updateSyncStatus('syncing');
+    
+    // Show loading overlay if manual sync (from button)
+    if (showLoadingFlag) {
+        showLoading();
+    }
+    
     console.log('Starting sync from Google Sheets...');
     
     try {
@@ -142,6 +159,7 @@ async function syncWithGoogleSheets() {
         showToast('Ошибка синхронизации: ' + error.message, 'error');
     } finally {
         isSyncing = false;
+        hideLoading();
     }
 }
 
@@ -164,8 +182,8 @@ function executeForceRefresh() {
     localStorage.removeItem(RECENT_SCANS_KEY);
     renderOrdersList();
     renderRecentScans();
-    // Trigger sync
-    syncWithGoogleSheets();
+    // Trigger sync with loading overlay
+    syncWithGoogleSheets(true);
     // Close modal
     const modal = document.getElementById('confirm-modal');
     if (modal) {
@@ -361,7 +379,8 @@ function updateSyncStatus(status) {
 }
 
 function manualSync() {
-    syncWithGoogleSheets();
+    console.log('Manual sync button clicked');
+    syncWithGoogleSheets(true); // true = show loading overlay
 }
 
 function clearAllData() {

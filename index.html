@@ -37,17 +37,12 @@
         .page.active { display: block; }
         .header { background: var(--primary); color: white; padding: 20px 16px; text-align: center; position: sticky; top: 0; z-index: 100; }
         .header h1 { font-size: 1.25rem; font-weight: 600; }
-        .header-sync { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 8px; }
-        .sync-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
-        .sync-indicator.syncing { background: var(--warning); animation: pulse 1s infinite; }
-        .sync-indicator.success { background: var(--success); }
-        .sync-indicator.error { background: var(--danger); }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .sync-status-text { font-size: 0.7rem; color: rgba(255,255,255,0.8); }
-        .sync-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .sync-btn:hover { background: rgba(255,255,255,0.3); }
-        .sync-btn.spinning svg { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        /* Loading overlay */
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; }
+        .loading-overlay.active { display: flex; }
+        .loading-spinner { width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite; }
+        .loading-text { color: white; margin-top: 20px; font-size: 1.1rem; }
         .back-btn { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: white; font-size: 1.25rem; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); }
         .back-btn:hover { background: rgba(255, 255, 255, 0.1); }
         .main-content { padding: 20px 16px; }
@@ -151,19 +146,14 @@
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Загрузка данных...</div>
+    </div>
     <div class="app-container">
         <div id="scanner-page" class="page active">
             <header class="header">
-                <div class="header-sync">
-                    <span id="sync-status" class="sync-indicator"></span>
-                    <span id="sync-status-text" class="sync-status-text"></span>
-                    <button id="manual-sync-btn" class="sync-btn" title="Синхронизировать">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c-1.657 0-3-4.03-3-9s1.343-9 3-9m0 18c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 0 1 9-9"/>
-                        </svg>
-                    </button>
-                </div>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v2</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v3</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -194,7 +184,7 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c-1.657 0-3-4.03-3-9s1.343-9 3-9m0 18c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 0 1 9-9"/>
                         </svg>
-                        Синхронизация
+                        Загрузить данные из таблицы
                     </button>
                     <button id="force-refresh-btn" class="btn btn-primary" title="Очистить и синхронизировать">
                         🔄
