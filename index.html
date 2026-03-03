@@ -55,6 +55,10 @@
         .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
         .btn-outline:hover { background: var(--primary); color: white; }
         .btn-icon { font-size: 1.25rem; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #dc2626; }
         .action-buttons { display: flex; gap: 12px; margin-top: 16px; }
         .action-buttons .btn { flex: 1; }
         .input { width: 100%; padding: 12px 16px; font-size: 1rem; border: 2px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); transition: border-color 0.2s ease; }
@@ -168,6 +172,11 @@
                 <div class="action-buttons">
                     <button id="view-orders-btn" class="btn btn-outline">📋 Все заказы</button>
                     <button id="view-qr-codes-btn" class="btn btn-outline">🔲 QR-коды</button>
+                </div>
+                <div style="margin-top:16px;padding:16px;background:#fef3c7;border-radius:8px;">
+                    <p style="font-size:0.85rem;color:#92400e;">📡 <strong>BLE сканер:</strong></p>
+                    <p style="font-size:0.8rem;color:#b45309;margin-top:4px;">Подключите BLE сканер. Требуется Chrome на Android или iOS 18+ Safari.</p>
+                    <button id="scanner-toggle" class="btn btn-success" style="margin-top:8px;width:100%;">🟢 Включить сканер</button>
                 </div>
             </main>
             <div id="scanner-modal" class="modal">
@@ -322,13 +331,120 @@ const RECENT_SCANS_KEY = 'recent_scans';
 const TEST_CODES = ['2020_1','2020_2','2020_3','2020_4','2020_5','2021_1','2021_2','2021_3','2022_1','2022_2','2022_3','2022_4'];
 let orders = {}, recentScans = [], currentOrderId = null, currentRollNumber = null, html5QrcodeScanner = null;
 
-document.addEventListener('DOMContentLoaded', () => { loadData(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); });
+document.addEventListener('DOMContentLoaded', () => { loadData(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); setupBluetoothScanner(); });
 
 function loadData(){const storedOrders=localStorage.getItem(STORAGE_KEY);const storedScans=localStorage.getItem(RECENT_SCANS_KEY);if(storedOrders){orders=JSON.parse(storedOrders);} if(storedScans){recentScans=JSON.parse(storedScans);}}
 function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));localStorage.setItem(RECENT_SCANS_KEY,JSON.stringify(recentScans));}
 function initializeTestData(){orders['2020']={id:'2020',totalRolls:5,rolls:[{rollNumber:1,factoryLength:50,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:2,factoryLength:48,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:49,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:5,factoryLength:51,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2021']={id:'2021',totalRolls:3,rolls:[{rollNumber:1,factoryLength:45,measuredLength:43.5,shrinkage:3.3,status:'completed'},{rollNumber:2,factoryLength:47,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:46,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2022']={id:'2022',totalRolls:4,rolls:[{rollNumber:1,factoryLength:55,measuredLength:53.8,shrinkage:2.2,status:'completed'},{rollNumber:2,factoryLength:53,measuredLength:51.5,shrinkage:2.8,status:'completed'},{rollNumber:3,factoryLength:54,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'}]};saveData();}
 
 function initializeEventListeners(){document.getElementById('scan-btn').addEventListener('click',openScanner);document.getElementById('manual-submit').addEventListener('click',handleManualInput);document.getElementById('manual-submit-modal').addEventListener('click',handleManualInputModal);document.querySelectorAll('#quick-codes button').forEach(btn=>{btn.addEventListener('click',()=>{const code=btn.dataset.code;closeScanner();processScannedCode(code);});});document.getElementById('manual-code').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleManualInput();});document.getElementById('manual-code-modal').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleManualInputModal();});document.getElementById('view-orders-btn').addEventListener('click',()=>showPage('orders-page'));document.getElementById('view-qr-codes-btn').addEventListener('click',()=>showPage('qr-codes-page'));document.getElementById('back-to-scanner').addEventListener('click',()=>showPage('scanner-page'));document.getElementById('back-to-scanner2').addEventListener('click',()=>showPage('scanner-page'));document.getElementById('back-to-orders').addEventListener('click',()=>showPage('orders-page'));document.getElementById('close-scanner').addEventListener('click',closeScanner);document.getElementById('close-record').addEventListener('click',closeRecordModal);document.getElementById('record-form').addEventListener('submit',handleRecordSubmit);document.getElementById('save-partial').addEventListener('click',handlePartialSave);document.getElementById('add-order-btn').addEventListener('click',openNewOrderModal);document.getElementById('close-new-order').addEventListener('click',closeNewOrderModal);document.getElementById('new-order-form').addEventListener('submit',handleNewOrderSubmit);document.getElementById('add-roll-btn').addEventListener('click',openAddRollModal);document.getElementById('order-search').addEventListener('input',handleSearch);}
+
+// Bluetooth BLE сканер - подключение через Web Bluetooth API
+let bluetoothBuffer = '';
+let bluetoothTimeout = null;
+let bluetoothEnabled = false;
+let bluetoothDevice = null;
+let bluetoothCharacteristic = null;
+
+// Популярные UUID для BLE сканеров штрих-кодов
+const BLE_SCANNER_UUIDS = [
+    { service: '0000fff0-0000-1000-8000-00805f9b34fb', characteristic: '0000fff1-0000-1000-8000-00805f9b34fb' },
+    { service: '0000ffe0-0000-1000-8000-00805f9b34fb', characteristic: '0000ffe1-0000-1000-8000-00805f9b34fb' },
+    { service: '00001800-0000-1000-8000-00805f9b34fb', characteristic: '00002a00-0000-1000-8000-00805f9b34fb' }
+];
+
+async function connectBLEScanner() {
+    for (const uuid of BLE_SCANNER_UUIDS) {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ services: [uuid.service] }],
+                optionalServices: BLE_SCANNER_UUIDS.map(u => u.service)
+            });
+            
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService(uuid.service);
+            const characteristic = await service.getCharacteristic(uuid.characteristic);
+            
+            await characteristic.startNotifications();
+            characteristic.addEventListener('characteristicvaluechanged', handleBLEScan);
+            
+            return { device, characteristic };
+        } catch(e) {
+            console.log('UUID', uuid.service, 'not found, trying next...');
+        }
+    }
+    throw new Error('No supported BLE scanner found');
+}
+
+function setupBluetoothScanner(){
+    const scannerToggle = document.getElementById('scanner-toggle');
+    if(scannerToggle){
+        scannerToggle.addEventListener('click',async ()=>{
+            if(bluetoothEnabled){
+                if(bluetoothDevice){
+                    await bluetoothDevice.gatt.disconnect();
+                    bluetoothDevice = null;
+                }
+                bluetoothEnabled = false;
+                scannerToggle.textContent = '🟢 Подключить BLE сканер';
+                scannerToggle.className = 'btn btn-success';
+                showToast('Сканер отключён','warning');
+            } else {
+                try {
+                    showToast('Поиск BLE сканера...','info');
+                    const result = await connectBLEScanner();
+                    bluetoothDevice = result.device;
+                    bluetoothCharacteristic = result.characteristic;
+                    
+                    bluetoothEnabled = true;
+                    scannerToggle.textContent = '🔌 Отключить сканер';
+                    scannerToggle.className = 'btn btn-danger';
+                    showToast('BLE сканер подключён!','success');
+                    
+                    bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+                        bluetoothEnabled = false;
+                        scannerToggle.textContent = '🟢 Подключить BLE сканер';
+                        scannerToggle.className = 'btn btn-success';
+                        showToast('Сканер отключён','warning');
+                    });
+                } catch(error) {
+                    console.log('BLE error:', error);
+                    showToast('Не удалось подключить BLE сканер','error');
+                }
+            }
+        });
+    }
+    
+    // Fallback: слушаем клавиатуру
+    document.addEventListener('keydown',(e)=>{
+        if(!bluetoothEnabled) return;
+        if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+        
+        if(e.key==='Enter'){
+            if(bluetoothBuffer.trim()){
+                processScannedCode(bluetoothBuffer.trim());
+                showToast('Сканирование: '+bluetoothBuffer.trim(),'success');
+            }
+            bluetoothBuffer='';
+            clearTimeout(bluetoothTimeout);
+            return;
+        }
+        
+        bluetoothBuffer+=e.key;
+        clearTimeout(bluetoothTimeout);
+        bluetoothTimeout=setTimeout(()=>{bluetoothBuffer='';},100);
+    });
+}
+
+function handleBLEScan(event){
+    const value = event.target.value;
+    const decoder = new TextDecoder('utf-8');
+    const code = decoder.decode(value).trim();
+    if(code){
+        processScannedCode(code);
+        showToast('BLE: '+code,'success');
+    }
+}
 
 function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page')renderOrdersList();}
 function openScanner(){const modal=document.getElementById('scanner-modal');modal.classList.add('active');if(!html5QrcodeScanner){html5QrcodeScanner=new Html5QrcodeScanner('qr-reader',{fps:10,qrbox:{width:250,height:250}},false);} html5QrcodeScanner.render(handleQRCodeScan,(error)=>{console.log('Scanner error:',error);});}
