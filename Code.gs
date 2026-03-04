@@ -242,16 +242,19 @@ function getData() {
 function saveData(data) {
   const sheet = getSheet();
   
-  // Clear existing data (keep header)
-  if (sheet.getLastRow() > 1) {
-    sheet.deleteRows(2, sheet.getLastRow() - 1);
+  // Read existing data from sheet
+  const existingData = {};
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const existingRows = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    existingRows.forEach(row => {
+      const key = row[0] + '_' + row[1]; // OrderID_RollNumber
+      existingData[key] = row;
+    });
   }
   
-  // Write headers
+  // Merge new data with existing
   const headers = ['Order ID', 'Roll Number', 'Factory Length', 'Measured Length', 'Shrinkage', 'Status'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  
-  const allRows = [];
   
   // Handle both array format and object format
   let ordersArray = [];
@@ -261,7 +264,7 @@ function saveData(data) {
     ordersArray = data.orders;
   }
   
-  // Write orders data
+  // Update with new data
   if (ordersArray.length > 0) {
     ordersArray.forEach(item => {
       // Convert string numbers with comma to point
@@ -281,16 +284,28 @@ function saveData(data) {
         status = 'partial';
       }
       
-      allRows.push([
+      const key = item.orderId + '_' + item.rollNumber;
+      existingData[key] = [
         item.orderId,
         item.rollNumber,
         factoryLength || '',
         measuredLength || '',
         shrinkage || '',
         status
-      ]);
+      ];
     });
   }
+  
+  // Convert back to array
+  const allRows = Object.values(existingData);
+  
+  // Clear and write all data
+  if (sheet.getLastRow() > 1) {
+    sheet.deleteRows(2, sheet.getLastRow() - 1);
+  }
+  
+  // Write headers
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   
   if (allRows.length > 0) {
     sheet.getRange(2, 1, allRows.length, headers.length).setValues(allRows);
