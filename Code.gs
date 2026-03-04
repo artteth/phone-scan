@@ -54,6 +54,65 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  const mode = e.parameter.mode || 'json';
+  
+  // JSONP mode for CORS bypass (GET only)
+  if (mode === 'jsonp') {
+    const callback = e.parameter.callback || 'callback';
+    const action = e.parameter.action || 'getData';
+    
+    let result;
+    try {
+      if (action === 'getData') {
+        result = { ok: true, data: getData() };
+      } else if (action === 'saveData') {
+        // For saveData with JSONP, data must be in parameter
+        const dataStr = e.parameter.data;
+        let data = [];
+        if (dataStr && dataStr.length < 5000) { // Limit size for GET
+          try {
+            data = JSON.parse(decodeURIComponent(dataStr));
+          } catch(err) {
+            result = { ok: false, error: 'Invalid data format' };
+            const output = ContentService
+              .createTextOutput(callback + '(' + JSON.stringify(result) + ')')
+              .setMimeType(ContentService.MimeType.JAVASCRIPT);
+            return output;
+          }
+        } else {
+          result = { ok: false, error: 'Data too large for GET, use POST' };
+          const output = ContentService
+            .createTextOutput(callback + '(' + JSON.stringify(result) + ')')
+            .setMimeType(ContentService.MimeType.JAVASCRIPT);
+          return output;
+        }
+        result = { ok: true, data: saveData(data) };
+      } else {
+        result = { ok: false, error: 'Unknown action' };
+      }
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    
+    const output = ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(result) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    return output;
+  }
+  
+  // POST mode for saving data (handles larger data)
+  let postData = null;
+  if (e.postData && e.postData.contents) {
+    try {
+      const parsed = JSON.parse(e.postData.contents);
+      if (parsed.action === 'saveData' && parsed.data) {
+        return ContentService.createTextOutput(JSON.stringify(saveData(parsed.data))).setMimeType(ContentService.MimeType.JSON);
+      }
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ error: err.message })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  
   return handleRequest(e);
 }
 

@@ -157,7 +157,7 @@
     <div class="app-container">
         <div id="scanner-page" class="page active">
             <header class="header">
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v20</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v21</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -390,8 +390,46 @@ function hideLoading() {
     if (overlay) overlay.classList.remove('active');
 }
 
-// JSONP function for CORS bypass
+// API function - uses POST for saveData, JSONP for getData
 function apiJsonp(action, params = {}) {
+  // For saveData, use POST to avoid URL length limits
+  if (action === 'saveData' && params.data) {
+    return new Promise((resolve, reject) => {
+      const url = GOOGLE_SHEETS_URL.replace('exec?', 'exec?');
+      const postData = JSON.stringify({
+        action: 'saveData',
+        data: JSON.parse(params.data)
+      });
+      
+      console.log('POST URL:', url);
+      
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: postData
+      })
+      .then(response => response.text())
+      .then(text => {
+        try {
+          const data = JSON.parse(text);
+          if (data && data.ok) {
+            resolve(data.data);
+          } else {
+            reject(new Error(data?.error || 'API error'));
+          }
+        } catch(err) {
+          reject(new Error('Invalid response'));
+        }
+      })
+      .catch(err => {
+        reject(new Error('POST request failed: ' + err.message));
+      });
+    });
+  }
+  
+  // For getData and other actions, use JSONP
   return new Promise((resolve, reject) => {
     const callbackName = 'jsonp_callback_' + Date.now();
     let urlParams = `mode=jsonp&action=${encodeURIComponent(action)}&callback=${callbackName}`;
