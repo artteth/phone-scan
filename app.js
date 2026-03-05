@@ -34,6 +34,19 @@ document.addEventListener('DOMContentLoaded', () => {
     renderRecentScans();
     renderQRCodePage();
     
+    // Add focus listener to populate dropdown when opened
+    const orderSearchSelect = document.getElementById('order-search');
+    if (orderSearchSelect) {
+        orderSearchSelect.addEventListener('mousedown', () => {
+            console.log('Order search select clicked, populating...');
+            populateOrderSearch();
+        });
+        orderSearchSelect.addEventListener('focus', () => {
+            console.log('Order search select focused, populating...');
+            populateOrderSearch();
+        });
+    }
+    
     // Show initial sync status
     updateSyncStatus(lastSyncTime ? 'success' : '');
     
@@ -512,12 +525,14 @@ function initializeEventListeners() {
 
 // ===== Navigation =====
 function showPage(pageId) {
+    console.log('showPage called with:', pageId);
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
     document.getElementById(pageId).classList.add('active');
     
     if (pageId === 'orders-page') {
+        console.log('Going to orders page, calling populateOrderSearch');
         populateOrderSearch();
         renderOrdersList();
     }
