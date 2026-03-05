@@ -529,12 +529,17 @@ function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
-    document.getElementById(pageId).classList.add('active');
+    const targetPage = document.getElementById(pageId);
+    targetPage.classList.add('active');
     
     if (pageId === 'orders-page') {
         console.log('Going to orders page, calling populateOrderSearch');
-        populateOrderSearch();
-        renderOrdersList();
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+            console.log('setTimeout fired, populating orders');
+            populateOrderSearch();
+            renderOrdersList();
+        }, 100);
     }
 }
 
