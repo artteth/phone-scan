@@ -178,7 +178,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v49</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v50</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -264,6 +264,13 @@
                     <div style="padding:12px;background:#f5f5f5;border-top:1px solid var(--border);">
                         <p style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">⚙️ Настройки ZBar:</p>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <label style="font-size:0.8rem;">
+                                Камера:
+                                <select id="zbar-camera" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="environment" selected>Задняя</option>
+                                    <option value="user">Передняя</option>
+                                </select>
+                            </label>
                             <label style="font-size:0.8rem;">
                                 FPS:
                                 <select id="zbar-fps" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
@@ -707,9 +714,10 @@ function openZbarScanner() {
     console.log('[ZBar] Starting scanner with jsQR...');
     
     // Получаем настройки
+    var zbarCamera = document.getElementById('zbar-camera').value || 'environment';
     var zbarFps = parseInt(document.getElementById('zbar-fps').value) || 10;
     var zbarQuality = parseInt(document.getElementById('zbar-quality').value) || 1280;
-    console.log('[ZBar] Settings - FPS:', zbarFps, 'Quality:', zbarQuality);
+    console.log('[ZBar] Settings - Camera:', zbarCamera, 'FPS:', zbarFps, 'Quality:', zbarQuality);
     
     const modal = document.getElementById('zbar-scanner-modal');
     modal.classList.add('active');
@@ -728,7 +736,7 @@ function openZbarScanner() {
     
     navigator.mediaDevices.getUserMedia({ 
         video: { 
-            facingMode: 'environment', 
+            facingMode: zbarCamera, 
             width: { ideal: videoWidth }, 
             height: { ideal: videoHeight } 
         } 
@@ -832,6 +840,9 @@ document.getElementById('zbar-fps').onchange = function() {
 };
 document.getElementById('zbar-quality').onchange = function() {
     console.log('[ZBar] Quality changed to:', this.value);
+};
+document.getElementById('zbar-camera').onchange = function() {
+    console.log('[ZBar] Camera changed to:', this.value);
 };
 
 console.log('[App] ZBar scanner settings listeners added');
