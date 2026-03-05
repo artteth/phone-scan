@@ -178,7 +178,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v54</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v55</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -902,7 +902,12 @@ document.getElementById('zbar-camera').onchange = function() {
 console.log('[App] ZBar scanner settings listeners added');
 
 // ===== Scanbot Scanner =====
-async function openScanbotScanner() {
+var scanbotOpening = false;
+
+function openScanbotScanner() {
+    if (scanbotOpening) return;
+    scanbotOpening = true;
+    
     console.log('[Scanbot] Starting scanner...');
     
     var modal = document.getElementById('scanbot-scanner-modal');
@@ -915,6 +920,7 @@ async function openScanbotScanner() {
     if (typeof jsQR === 'undefined') {
         console.error('[Scanbot] jsQR not loaded!');
         reader.innerHTML = '<div class="empty-state">Ошибка: jsQR не загружен.<br>Обновите страницу.</div>';
+        scanbotOpening = false;
         return;
     }
     
@@ -936,6 +942,9 @@ function openScanbotWithJsQR(modal, reader) {
     }).then(function(stream) {
         console.log('[Scanbot] Camera access granted');
         window.scanbotStream = stream;
+        
+        // Разрешаем повторное открытие через 1 секунду
+        setTimeout(function() { scanbotOpening = false; }, 1000);
         
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -985,6 +994,7 @@ function openScanbotWithJsQR(modal, reader) {
     }).catch(function(err) {
         console.error('[Scanbot] Camera error:', err);
         reader.innerHTML = '<div class="empty-state">Ошибка камеры: ' + err.message + '</div>';
+        scanbotOpening = false;
     });
 }
 
@@ -1014,6 +1024,9 @@ function closeScanbotScanner() {
     
     var reader = document.getElementById('scanbot-reader');
     if (reader) reader.innerHTML = '';
+    
+    // Разрешаем повторное открытие
+    scanbotOpening = false;
 }
 
 function handleManualInputScanbot() {
