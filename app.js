@@ -144,6 +144,7 @@ async function syncWithGoogleSheets(showLoadingFlag = false) {
             localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(recentScans));
             
             renderRecentScans();
+            populateOrderSearch();
             renderOrdersList();
             console.log('Data synced from Google Sheets successfully');
             console.log('Orders:', JSON.stringify(orders));
