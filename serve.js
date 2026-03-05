@@ -34,6 +34,26 @@ const mimeTypes = {
 };
 
 const server = http.createServer((req, res) => {
+    // API requests - redirect to Google Sheets API server
+    if (req.url.startsWith('/api/')) {
+        const options = {
+            hostname: 'localhost',
+            port: 3001, // API server port
+            path: req.url,
+            method: req.method,
+            headers: req.headers
+        };
+        
+        const proxy = http.request(options, (proxyRes) => {
+            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+            proxyRes.pipe(res, { end: true });
+        });
+        
+        req.pipe(proxy, { end: true });
+        return;
+    }
+    
+    // Serve static files
     let filePath = req.url === '/' ? '/index.html' : req.url;
     filePath = path.join(__dirname, filePath);
     
@@ -76,4 +96,5 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🌐 Откройте на телефоне:`);
     console.log(`   http://${ip}:${PORT}`);
     console.log(`\n⚠️  Убедитесь что телефон и компьютер в одной WiFi сети!\n`);
+    console.log(`⚠️  API запросы перенаправляются на порт 3001\n`);
 });

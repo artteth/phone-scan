@@ -9,6 +9,7 @@ const GOOGLE_SHEETS_URL = '/api/v1/data';
 const STORAGE_KEY = 'fabric_inventory_data';
 const RECENT_SCANS_KEY = 'recent_scans';
 const SYNC_STATUS_KEY = 'last_sync_time';
+const SYNC_QUEUE_KEY = 'sync_queue'; // Очередь для офлайн-синхронизации
 
 // Test data codes for QR generation
 const TEST_CODES = [
@@ -48,6 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show initial sync status
     updateSyncStatus(lastSyncTime ? 'success' : '');
     
+    // Показать индикатор ожидающих синхронизации данных
+    updatePendingSyncIndicator();
+    
     // Try to sync - this will fetch from Google Sheets
     console.log('App loaded, attempting initial sync...');
     syncWithGoogleSheets();
@@ -79,9 +83,130 @@ function saveData() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
     localStorage.setItem(RECENT_SCANS_KEY, JSON.stringify(recentScans));
     
-    // Immediately sync to Google Sheets
-    syncToGoogleSheets();
+    // Добавляем в очередь синхронизации вместо немедленной отправки
+    addToSyncQueue();
+    
+    // Пытаемся обработать очередь
+    processSyncQueue();
 }
+
+// ===== Sync Queue (Offline Support) =====
+// Функции для сохранения данных при отсутствии интернета
+
+function addToSyncQueue() {
+    // Получаем текущую очередь или создаём новую
+    let queue = JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '[]');
+    
+    // Добавляем текущие данные с timestamp
+    queue.push({
+        timestamp: new Date().toISOString(),
+        orders: JSON.parse(JSON.stringify(orders)), // Глубокая копия
+        recentScans: JSON.parse(JSON.stringify(recentScans))
+    });
+    
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+    
+    // Обновляем индикатор
+    updatePendingSyncIndicator();
+    
+    console.log('Added to sync queue, total items:', queue.length);
+}
+
+function getSyncQueue() {
+    return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '[]');
+}
+
+function clearSyncQueue() {
+    localStorage.setItem(SYNC_QUEUE_KEY, '[]');
+    updatePendingSyncIndicator();
+}
+
+async function processSyncQueue() {
+    const queue = getSyncQueue();
+    
+    if (queue.length === 0) {
+        return;
+    }
+    
+    if (isSyncing) {
+        console.log('Already syncing, skipping queue processing');
+        return;
+    }
+    
+    console.log('Processing sync queue, items:', queue.length);
+    
+    isSyncing = true;
+    updateSyncStatus('syncing');
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Пытаемся отправить каждый элемент очереди
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        
+        try {
+            await syncToGoogleSheets();
+            successCount++;
+            // Удаляем успешно отправленный элемент
+            queue.splice(i, 1);
+            i--; // Корректируем индекс после удаления
+        } catch (error) {
+            console.error('Failed to sync item:', error);
+            failCount++;
+        }
+    }
+    
+    // Сохраняем обновлённую очередь
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+    
+    isSyncing = false;
+    
+    // Обновляем индикатор
+    updatePendingSyncIndicator();
+    
+    if (queue.length === 0) {
+        updateSyncStatus('success');
+        lastSyncTime = new Date().toISOString();
+        localStorage.setItem(SYNC_STATUS_KEY, lastSyncTime);
+    } else {
+        updateSyncStatus('error');
+    }
+    
+    console.log('Sync queue processed. Success:', successCount, 'Failed:', failCount, 'Remaining:', queue.length);
+}
+
+function updatePendingSyncIndicator() {
+    const queue = getSyncQueue();
+    const pendingCount = queue.length;
+    
+    // Ищем или создаём элемент индикатора
+    let indicator = document.getElementById('pending-sync-indicator');
+    
+    if (!indicator) {
+        // Создаём элемент, если его нет
+        const syncStatus = document.getElementById('sync-status');
+        if (syncStatus) {
+            indicator = document.createElement('span');
+            indicator.id = 'pending-sync-indicator';
+            indicator.className = 'pending-sync-badge';
+            syncStatus.appendChild(indicator);
+        }
+    }
+    
+    if (indicator) {
+        if (pendingCount > 0) {
+            indicator.textContent = `(${pendingCount} несинхр.)`;
+            indicator.style.display = 'inline';
+            indicator.title = 'Есть данные, ожидающие синхронизации';
+        } else {
+            indicator.style.display = 'none';
+        }
+    }
+}
+
+// Запускаем периодическую проверку очереди каждые 30 секунд
+setInterval(processSyncQueue, 30000);
 
 // ===== Google Sheets Sync =====
 // Loading overlay functions

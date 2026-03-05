@@ -10,7 +10,7 @@
 
 ## Версия
 
-**v23** - актуальная версия на GitHub
+**v36** - актуальная версия на GitHub
 
 ## Структура Google Таблицы
 
@@ -97,7 +97,7 @@ GET https://script.google.com/macros/s/.../exec?mode=jsonp&action=saveData&data=
 https://script.google.com/macros/s/AKfycbxrD_B4A37h6QlyXgn4TX_nQYHgwGfkTAj4qVBD5-g_OM9-nMJjU1zhvIcMX4yztk36/exec
 ```
 
-Этот URL уже встроен в `index.html` (v23).
+Этот URL уже встроен в `index.html` (v36).
 
 ## Развёртывание
 
@@ -203,7 +203,8 @@ node serve.js
 
 | Версия | Описание |
 |--------|----------|
-| v23 | Исправлена функция saveData - мержит данные, не стирает старые |
+| v36 | Добавлена очередь синхронизации - данные не теряются при отсутствии интернета |
+| v35 | Исправлена функция saveData - мержит данные, не стирает старые |
 | v22 | JSONP only, фильтрация пустых рулонов |
 | v21 | Попытка использовать POST (не работает из-за CORS) |
 | v20 | Добавлена логика повтора при ошибках |
@@ -211,7 +212,7 @@ node serve.js
 
 ## Файлы проекта
 
-- `index.html` - основной HTML файл с JavaScript (версия v23)
+- `index.html` - основной HTML файл с JavaScript (версия v36)
 - `styles.css` - стили приложения
 - `serve.js` - локальный сервер для разработки
 - `Code.gs` - Google Apps Script код

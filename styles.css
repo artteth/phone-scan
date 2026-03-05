@@ -725,3 +725,56 @@ body {
         transform: translateY(0);
     }
 }
+
+/* ===== Pending Sync Indicator ===== */
+.pending-sync-badge {
+    background: #e67e22;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 8px;
+    font-weight: bold;
+    display: none;
+}
+
+.pending-sync-badge.visible {
+    display: inline-block;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+.sync-container {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* ===== Sync Status Styles ===== */
+.sync-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.sync-indicator.empty {
+    background: #999;
+}
+
+.sync-indicator.syncing {
+    background: #f39c12;
+    animation: pulse 1s infinite;
+}
+
+.sync-indicator.success {
+    background: #27ae60;
+}
+
+.sync-indicator.error {
+    background: #e74c3c;
+}
