@@ -178,7 +178,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v47</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v48</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -259,6 +259,31 @@
                     </div>
                     <div id="zbar-reader" class="qr-reader"></div>
                     <p class="scanner-hint">Наведите камеру на код (ZBar/WASM)</p>
+                    
+                    <!-- ZBar настройки -->
+                    <div style="padding:12px;background:#f5f5f5;border-top:1px solid var(--border);">
+                        <p style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">⚙️ Настройки ZBar:</p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <label style="font-size:0.8rem;">
+                                FPS:
+                                <select id="zbar-fps" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="5">5</option>
+                                    <option value="10" selected>10</option>
+                                    <option value="15">15</option>
+                                    <option value="30">30</option>
+                                </select>
+                            </label>
+                            <label style="font-size:0.8rem;">
+                                Качество:
+                                <select id="zbar-quality" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="640">Низкое</option>
+                                    <option value="1280" selected>Среднее</option>
+                                    <option value="1920">Высокое</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                    
                     <div style="padding:20px;border-top:1px solid var(--border);">
                         <p class="scanner-hint">Или введите вручную:</p>
                         <div class="manual-input" style="margin-top:8px;">
@@ -680,6 +705,12 @@ let zbarStream = null;
 
 function openZbarScanner() {
     console.log('[ZBar] Starting scanner with jsQR...');
+    
+    // Получаем настройки
+    var zbarFps = parseInt(document.getElementById('zbar-fps').value) || 10;
+    var zbarQuality = parseInt(document.getElementById('zbar-quality').value) || 1280;
+    console.log('[ZBar] Settings - FPS:', zbarFps, 'Quality:', zbarQuality);
+    
     const modal = document.getElementById('zbar-scanner-modal');
     modal.classList.add('active');
     
@@ -692,8 +723,15 @@ function openZbarScanner() {
         return;
     }
     
+    var videoWidth = zbarQuality;
+    var videoHeight = Math.round(zbarQuality * 0.75);
+    
     navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+        video: { 
+            facingMode: 'environment', 
+            width: { ideal: videoWidth }, 
+            height: { ideal: videoHeight } 
+        } 
     }).then(function(stream) {
         console.log('[ZBar] Camera access granted');
         zbarStream = stream;
@@ -711,11 +749,21 @@ function openZbarScanner() {
         reader.appendChild(video);
         console.log('[ZBar] Video element created');
         
-        var scanFrame = function() {
+        var lastScanTime = 0;
+        var scanInterval = 1000 / zbarFps; // FPS to interval
+        
+        var scanFrame = function(timestamp) {
             if (!zbarStream || !modal.classList.contains('active')) {
                 console.log('[ZBar] Scan stopped');
                 return;
             }
+            
+            // Control FPS
+            if (timestamp - lastScanTime < scanInterval) {
+                requestAnimationFrame(scanFrame);
+                return;
+            }
+            lastScanTime = timestamp;
             
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 canvas.width = video.videoWidth;
