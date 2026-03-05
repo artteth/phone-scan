@@ -177,13 +177,17 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v39</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v40</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
                     <button id="scan-btn" class="btn btn-primary btn-large">
                         <span class="btn-icon">📷</span>
                         Сканировать QR-код
+                    </button>
+                    <button id="scan-btn-zbar" class="btn btn-secondary btn-large" style="margin-top: 12px;">
+                        <span class="btn-icon">🔍</span>
+                        Сканировать (ZBar)
                     </button>
                     <div class="divider">
                         <span>или</span>
@@ -242,6 +246,23 @@
                             <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2021_1">2021_1</button>
                             <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2021_2">2021_2</button>
                             <button class="btn btn-outline" style="font-size:0.75rem;padding:6px 10px;" data-code="2022_1">2022_1</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="zbar-scanner-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Сканирование (ZBar)</h2>
+                        <button class="close-btn" id="close-zbar-scanner">&times;</button>
+                    </div>
+                    <div id="zbar-reader" class="qr-reader"></div>
+                    <p class="scanner-hint">Наведите камеру на код (ZBar/WASM)</p>
+                    <div style="padding:20px;border-top:1px solid var(--border);">
+                        <p class="scanner-hint">Или введите вручную:</p>
+                        <div class="manual-input" style="margin-top:8px;">
+                            <input type="text" id="manual-code-zbar" placeholder="напр. 2020_1" class="input">
+                            <button id="manual-submit-zbar" class="btn btn-primary">OK</button>
                         </div>
                     </div>
                 </div>
@@ -381,7 +402,7 @@
                             <span>Медленнее (экономия батареи)</span>
                             <span id="fps-value">10</span>
                         </div>
-                        <input type="range" id="fps-slider" min="1" max="30" value="10">
+                        <input type="range" id="fps-slider" min="1" max="60" value="10">
                         <p class="settings-info">Более высокая частота = быстрее сканирование, но больше энергопотребление</p>
                     </div>
                     <div class="settings-group">

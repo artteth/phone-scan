@@ -24,6 +24,8 @@ let recentScans = [];
 let currentOrderId = null;
 let currentRollNumber = null;
 let html5QrcodeScanner = null;
+let zbarScanner = null;
+let zbarStream = null;
 let isSyncing = false;
 let lastSyncTime = null;
 let forceSync = false;
@@ -599,6 +601,14 @@ function initializeEventListeners() {
     // Scanner modal
     document.getElementById('close-scanner').addEventListener('click', closeScanner);
     
+    // ZBar Scanner modal
+    document.getElementById('close-zbar-scanner').addEventListener('click', closeZbarScanner);
+    document.getElementById('scan-btn-zbar').addEventListener('click', openZbarScanner);
+    document.getElementById('manual-submit-zbar').addEventListener('click', handleManualInputZbar);
+    document.getElementById('manual-code-zbar').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleManualInputZbar();
+    });
+    
     // Record modal
     document.getElementById('close-record').addEventListener('click', closeRecordModal);
     document.getElementById('record-form').addEventListener('submit', handleRecordSubmit);
@@ -701,6 +711,114 @@ function closeScanner() {
     
     if (html5QrcodeScanner) {
         html5QrcodeScanner.clear().catch(err => console.log('Error clearing scanner:', err));
+    }
+}
+
+// ===== ZBar Scanner (Native BarcodeDetector API) =====
+async function openZbarScanner() {
+    const modal = document.getElementById('zbar-scanner-modal');
+    modal.classList.add('active');
+    
+    const reader = document.getElementById('zbar-reader');
+    
+    // Проверяем поддержку BarcodeDetector API
+    if (!('BarcodeDetector' in window)) {
+        reader.innerHTML = '<div class="empty-state">BarcodeDetector не поддерживается в этом браузере.<br><br>Попробуйте использовать Chrome на Android или установите расширение.</div>';
+        return;
+    }
+    
+    try {
+        // Создаём BarcodeDetector (использует ZBar внутри на Android)
+        const barcodeDetector = new BarcodeDetector({
+            formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+        });
+        
+        // Запрашиваем доступ к камере
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' } 
+        });
+        
+        zbarStream = stream;
+        
+        // Создаём video элемент
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.autoplay = true;
+        
+        reader.innerHTML = '';
+        reader.appendChild(video);
+        
+        // Сканируем кадры
+        const scanFrame = async () => {
+            if (!zbarStream || modal.classList.contains('hidden')) return;
+            
+            try {
+                const barcodes = await barcodeDetector.detect(video);
+                if (barcodes.length > 0) {
+                    // Код найден!
+                    const code = barcodes[0].rawValue;
+                    console.log('ZBar detected:', code);
+                    
+                    // Останавливаем сканирование
+                    stopZbarScanner();
+                    
+                    // Обрабатываем код
+                    closeZbarScanner();
+                    processScannedCode(code);
+                    return;
+                }
+            } catch (err) {
+                console.log('ZBar scan error:', err);
+            }
+            
+            // Продолжаем сканирование
+            if (zbarStream) {
+                requestAnimationFrame(scanFrame);
+            }
+        };
+        
+        video.onloadedmetadata = () => {
+            video.play();
+            requestAnimationFrame(scanFrame);
+        };
+        
+    } catch (err) {
+        console.error('ZBar scanner error:', err);
+        reader.innerHTML = '<div class="empty-state">Ошибка доступа к камере: ' + err.message + '</div>';
+    }
+}
+
+function stopZbarScanner() {
+    if (zbarStream) {
+        zbarStream.getTracks().forEach(track => track.stop());
+        zbarStream = null;
+    }
+}
+
+function closeZbarScanner() {
+    const modal = document.getElementById('zbar-scanner-modal');
+    modal.classList.remove('active');
+    
+    stopZbarScanner();
+    
+    // Очищаем reader
+    const reader = document.getElementById('zbar-reader');
+    if (reader) {
+        reader.innerHTML = '';
+    }
+}
+
+function handleManualInputZbar() {
+    const input = document.getElementById('manual-code-zbar');
+    const code = input.value.trim();
+    
+    if (code) {
+        closeZbarScanner();
+        processScannedCode(code);
+        input.value = '';
+    } else {
+        showToast('Введите код', 'error');
     }
 }
 
