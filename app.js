@@ -810,11 +810,17 @@ function handleSearch(e) {
 
 function populateOrderSearch() {
     const select = document.getElementById('order-search');
+    console.log('populateOrderSearch called, orders:', Object.keys(orders));
+    if (!select) {
+        console.error('order-search select not found!');
+        return;
+    }
     // Keep the first default option
     select.innerHTML = '<option value="">Выберите номер заказа...</option>';
     
     // Get all order IDs and sort them
     const orderIds = Object.keys(orders).sort();
+    console.log('Order IDs:', orderIds);
     
     // Add each order as an option
     orderIds.forEach(orderId => {
@@ -823,6 +829,7 @@ function populateOrderSearch() {
         option.textContent = 'Заказ ' + orderId;
         select.appendChild(option);
     });
+    console.log('Dropdown options added, count:', orderIds.length);
 }
 
 // ===== Order Detail =====
