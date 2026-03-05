@@ -343,6 +343,8 @@ async function syncToGoogleSheets() {
     updateSyncStatus('syncing');
     console.log('Starting sync to Google Sheets (single row update)...');
     
+    let hasErrors = false;
+    
     try {
         // Convert orders to array format and send each roll individually
         const sheetsData = convertOrdersToSheetsFormat();
@@ -369,9 +371,14 @@ async function syncToGoogleSheets() {
                 });
                 
                 if (!response.ok) {
-                    console.error('Error saving row:', order.orderId, order.rollNumber);
+                    console.error('Error saving row:', order.orderId, order.rollNumber, response.status);
+                    hasErrors = true;
                 }
             }
+        }
+        
+        if (hasErrors) {
+            throw new Error('Some rows failed to save');
         }
         
         lastSyncTime = new Date().toISOString();
@@ -383,6 +390,7 @@ async function syncToGoogleSheets() {
         console.error('Error syncing to Google Sheets:', error);
         updateSyncStatus('error');
         showToast('Ошибка сохранения: ' + error.message, 'error');
+        throw error; // Перевыбрасываем ошибку чтобы очередь знала что синхронизация не удалась
     } finally {
         isSyncing = false;
     }
@@ -777,22 +785,44 @@ function addToRecentScans(code) {
 
 function renderRecentScans() {
     const container = document.getElementById('recent-list');
+    const queue = getSyncQueue();
     
     if (recentScans.length === 0) {
         container.innerHTML = '<p class="empty-state">Пока нет сканирований</p>';
         return;
     }
     
-    container.innerHTML = recentScans.map(scan => `
-        <div class="recent-item" data-code="${scan.code}">
-            <span class="recent-code">${scan.code}</span>
-            <span class="recent-time">${scan.timestamp}</span>
-        </div>
-    `).join('');
+    container.innerHTML = recentScans.map(scan => {
+        // Проверяем статус синхронизации для этого кода
+        const inQueue = queue.some(item => 
+            item.orders && Object.values(item.orders).some(order => 
+                order.id === scan.code.split('_')[0]
+            )
+        );
+        
+        const syncStatus = inQueue ? 'pending' : 'synced';
+        const statusIcon = inQueue ? '⏳' : '✅';
+        
+        return `
+            <div class="recent-item" data-code="${scan.code}">
+                <span class="recent-code">${scan.code}</span>
+                <span class="recent-time">${scan.timestamp}</span>
+                <span class="recent-sync-status ${syncStatus}" title="${inQueue ? 'Нажмите для синхронизации' : 'Синхронизировано'}" data-code="${scan.code}">${statusIcon}</span>
+            </div>
+        `;
+    }).join('');
     
-    // Add click handlers
+    // Add click handlers for items
     container.querySelectorAll('.recent-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+            // Если кликнули на иконку синхронизации - не открываем запись
+            if (e.target.classList.contains('recent-sync-status')) {
+                const code = e.target.dataset.code;
+                // Принудительная синхронизация
+                processSyncQueue();
+                showToast('Попытка синхронизации...', 'info');
+                return;
+            }
             const code = item.dataset.code;
             processScannedCode(code);
         });

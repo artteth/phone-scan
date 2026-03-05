@@ -778,3 +778,14 @@ body {
 .sync-indicator.error {
     background: #e74c3c;
 }
+
+/* Recent scan sync status */
+.recent-sync-status {
+    margin-left: auto;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.recent-sync-status:hover {
+    transform: scale(1.2);
+}
