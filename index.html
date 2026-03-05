@@ -178,7 +178,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v50</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v51</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -588,7 +588,37 @@ const closeSettingsBtn=document.getElementById('close-settings');if(closeSetting
 const fpsSlider=document.getElementById('fps-slider');if(fpsSlider){fpsSlider.value=scannerFps;document.getElementById('fps-value').textContent=scannerFps;fpsSlider.addEventListener('input',(e)=>{const val=parseInt(e.target.value);scannerFps=val;localStorage.setItem('scannerFps',val);document.getElementById('fps-value').textContent=val;});}}
 
 function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page'){populateOrderSuggestions();renderOrdersList();}}
-function openScanner(){const modal=document.getElementById('scanner-modal');modal.classList.add('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(()=>{});}html5QrcodeScanner=new Html5QrcodeScanner('qr-reader',{fps:scannerFps,qrbox:{width:250,height:250},useBarCodeDetectorIfSupported:true,showTorchButtonIfSupported:true,showZoomSliderIfSupported:true,rememberLastUsedCamera:true},false);html5QrcodeScanner.render(handleQRCodeScan,(error)=>{console.log('Scanner error:',error);});}
+function openScanner(){
+    console.log('[HTML5] Starting scanner...');
+    const modal=document.getElementById('scanner-modal');
+    modal.classList.add('active');
+    
+    // Очищаем предыдущий сканер
+    const readerDiv = document.getElementById('qr-reader');
+    readerDiv.innerHTML = '';
+    
+    if(html5QrcodeScanner){
+        html5QrcodeScanner.clear().catch(()=>{});
+    }
+    
+    try {
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            'qr-reader',
+            { 
+                fps: scannerFps, 
+                qrbox: { width: 250, height: 250 },
+                useBarCodeDetectorIfSupported: false
+            },
+            false
+        );
+        html5QrcodeScanner.render(handleQRCodeScan, (error)=>{
+            console.log('[HTML5] Scanner error:', error);
+        });
+        console.log('[HTML5] Scanner initialized with FPS:', scannerFps);
+    } catch(err) {
+        console.error('[HTML5] Error:', err);
+    }
+}
 function closeScanner(){const modal=document.getElementById('scanner-modal');modal.classList.remove('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(err=>console.log('Error clearing scanner:',err));}}
 
 // Settings modal functions
