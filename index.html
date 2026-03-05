@@ -180,7 +180,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v64</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v65</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -913,16 +913,53 @@ document.getElementById('close-zbar-scanner').onclick = closeZbarScanner;
 document.getElementById('manual-submit-zbar').onclick = handleManualInputZbar;
 document.getElementById('scan-btn-zbar').onclick = openZbarScanner;
 
+// Загрузка настроек ZBar из localStorage
+function loadZbarSettings() {
+    var savedCamera = localStorage.getItem('zbarCamera');
+    var savedFps = localStorage.getItem('zbarFps');
+    var savedQuality = localStorage.getItem('zbarQuality');
+    
+    if (savedCamera) {
+        document.getElementById('zbar-camera').value = savedCamera;
+    }
+    if (savedFps) {
+        document.getElementById('zbar-fps').value = savedFps;
+    }
+    if (savedQuality) {
+        document.getElementById('zbar-quality').value = savedQuality;
+    }
+    console.log('[ZBar] Settings loaded from localStorage');
+}
+
+// Сохранение настроек ZBar в localStorage
+function saveZbarSettings() {
+    var camera = document.getElementById('zbar-camera').value;
+    var fps = document.getElementById('zbar-fps').value;
+    var quality = document.getElementById('zbar-quality').value;
+    
+    localStorage.setItem('zbarCamera', camera);
+    localStorage.setItem('zbarFps', fps);
+    localStorage.setItem('zbarQuality', quality);
+    
+    console.log('[ZBar] Settings saved to localStorage:', { camera, fps, quality });
+}
+
 // Логи для настроек ZBar
 document.getElementById('zbar-fps').onchange = function() {
+    saveZbarSettings();
     console.log('[ZBar] FPS changed to:', this.value);
 };
 document.getElementById('zbar-quality').onchange = function() {
+    saveZbarSettings();
     console.log('[ZBar] Quality changed to:', this.value);
 };
 document.getElementById('zbar-camera').onchange = function() {
+    saveZbarSettings();
     console.log('[ZBar] Camera changed to:', this.value);
 };
+
+// Загружаем настройки при запуске
+loadZbarSettings();
 
 console.log('[App] ZBar scanner settings listeners added');
 
