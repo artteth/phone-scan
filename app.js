@@ -714,25 +714,36 @@ function closeScanner() {
     }
 }
 
-// ===== ZBar Scanner (Native BarcodeDetector API) =====
+// ===== ZBar Scanner (BarcodeDetector с polyfill для iOS) =====
 async function openZbarScanner() {
     const modal = document.getElementById('zbar-scanner-modal');
     modal.classList.add('active');
     
     const reader = document.getElementById('zbar-reader');
     
-    // Проверяем поддержку BarcodeDetector API
-    if (!('BarcodeDetector' in window)) {
-        reader.innerHTML = '<div class="empty-state">BarcodeDetector не поддерживается в этом браузере.<br><br>Попробуйте использовать Chrome на Android или установите расширение.</div>';
+    let detector;
+    
+    try {
+        if ('BarcodeDetector' in window) {
+            // Используем нативный API
+            detector = new window.BarcodeDetector({
+                formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+            });
+        } else {
+            // Динамически импортируем polyfill
+            reader.innerHTML = '<div class="empty-state">Загрузка сканера...</div>';
+            const { BarcodeDetector } = await import('https://cdn.jsdelivr.net/npm/barcode-detector@2.2.2/+esm');
+            detector = new BarcodeDetector({
+                formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+            });
+        }
+    } catch (err) {
+        console.error('BarcodeDetector loading error:', err);
+        reader.innerHTML = '<div class="empty-state">Не удалось загрузить сканер кодов.<br>Попробуйте обновить браузер.</div>';
         return;
     }
     
     try {
-        // Создаём BarcodeDetector (использует ZBar внутри на Android)
-        const barcodeDetector = new BarcodeDetector({
-            formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-        });
-        
         // Запрашиваем доступ к камере
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'environment' } 
@@ -745,35 +756,38 @@ async function openZbarScanner() {
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
         video.autoplay = true;
+        video.muted = true;
         
         reader.innerHTML = '';
         reader.appendChild(video);
         
         // Сканируем кадры
         const scanFrame = async () => {
-            if (!zbarStream || modal.classList.contains('hidden')) return;
+            if (!zbarStream || !modal.classList.contains('active')) return;
             
             try {
-                const barcodes = await barcodeDetector.detect(video);
-                if (barcodes.length > 0) {
-                    // Код найден!
-                    const code = barcodes[0].rawValue;
-                    console.log('ZBar detected:', code);
-                    
-                    // Останавливаем сканирование
-                    stopZbarScanner();
-                    
-                    // Обрабатываем код
-                    closeZbarScanner();
-                    processScannedCode(code);
-                    return;
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    const barcodes = await detector.detect(video);
+                    if (barcodes.length > 0) {
+                        // Код найден!
+                        const code = barcodes[0].rawValue;
+                        console.log('ZBar detected:', code);
+                        
+                        // Останавливаем сканирование
+                        stopZbarScanner();
+                        
+                        // Обрабатываем код
+                        closeZbarScanner();
+                        processScannedCode(code);
+                        return;
+                    }
                 }
             } catch (err) {
                 console.log('ZBar scan error:', err);
             }
             
             // Продолжаем сканирование
-            if (zbarStream) {
+            if (zbarStream && modal.classList.contains('active')) {
                 requestAnimationFrame(scanFrame);
             }
         };
