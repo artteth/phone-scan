@@ -26,6 +26,7 @@ let currentRollNumber = null;
 let html5QrcodeScanner = null;
 let zbarScanner = null;
 let zbarStream = null;
+let scanbotStream = null;
 let isSyncing = false;
 let lastSyncTime = null;
 let forceSync = false;
@@ -609,6 +610,14 @@ function initializeEventListeners() {
         if (e.key === 'Enter') handleManualInputZbar();
     });
     
+    // Scanbot Scanner modal
+    document.getElementById('close-scanbot-scanner').addEventListener('click', closeScanbotScanner);
+    document.getElementById('scan-btn-scanbot').addEventListener('click', openScanbotScanner);
+    document.getElementById('manual-submit-scanbot').addEventListener('click', handleManualInputScanbot);
+    document.getElementById('manual-code-scanbot').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleManualInputScanbot();
+    });
+    
     // Record modal
     document.getElementById('close-record').addEventListener('click', closeRecordModal);
     document.getElementById('record-form').addEventListener('submit', handleRecordSubmit);
@@ -838,6 +847,177 @@ function handleManualInputZbar() {
     
     if (code) {
         closeZbarScanner();
+        processScannedCode(code);
+        input.value = '';
+    } else {
+        showToast('Введите код', 'error');
+    }
+}
+
+// ===== Scanbot Scanner =====
+async function openScanbotScanner() {
+    console.log('[Scanbot] Starting scanner...');
+    const modal = document.getElementById('scanbot-scanner-modal');
+    modal.classList.add('active');
+    
+    const reader = document.getElementById('scanbot-reader');
+    reader.innerHTML = '<div class="empty-state">Инициализация камеры...</div>';
+    
+    // Проверяем наличие Scanbot SDK
+    if (typeof ScanbotSDK === 'undefined') {
+        console.error('[Scanbot] SDK not loaded!');
+        reader.innerHTML = '<div class="empty-state">Ошибка: Scanbot SDK не загружен. Обновите страницу.</div>';
+        return;
+    }
+    
+    try {
+        console.log('[Scanbot] Initializing SDK...');
+        
+        // Инициализируем Scanbot SDK - работает 60 секунд без лицензии
+        // Используем пустую лицензию для ознакомительного режима
+        const sdk = new ScanbotSDK({
+            licenseKey: '', // Без лицензии - 60 секунд бесплатно
+            containerId: 'scanbot-reader',
+            layout: 'RECT',
+            barcodeFormats: ['QR_CODE'],
+        });
+        
+        console.log('[Scanbot] SDK initialized, starting scanner...');
+        
+        // Запускаем сканер
+        await sdk.startScanner({
+            onScan: (result) => {
+                console.log('[Scanbot] Scan result:', result);
+                if (result && result.barcode && result.barcode.text) {
+                    sdk.stopScanner();
+                    closeScanbotScanner();
+                    processScannedCode(result.barcode.text);
+                }
+            },
+            onError: (error) => {
+                console.error('[Scanbot] Scanner error:', error);
+                reader.innerHTML = '<div class="empty-state">Ошибка сканера: ' + error.message + '</div>';
+            }
+        });
+        
+        // Сохраняем ссылку на SDK
+        window.scanbotSdkInstance = sdk;
+        
+        reader.innerHTML = '<div class="empty-state">Сканирование... (60 сек бесплатно)</div>';
+        
+    } catch (err) {
+        console.error('[Scanbot] Error:', err);
+        // Если Scanbot SDK не работает без лицензии, используем fallback с jsQR
+        console.log('[Scanbot] Falling back to jsQR...');
+        openScanbotFallback();
+    }
+}
+
+// Fallback: используем камеру + jsQR как в ZBar сканере
+async function openScanbotFallback() {
+    console.log('[Scanbot Fallback] Starting with jsQR...');
+    const reader = document.getElementById('scanbot-reader');
+    const modal = document.getElementById('scanbot-scanner-modal');
+    reader.innerHTML = '<div class="empty-state">Инициализация камеры...</div>';
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'environment',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        
+        scanbotStream = stream;
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.autoplay = true;
+        video.muted = true;
+        
+        reader.innerHTML = '';
+        reader.appendChild(video);
+        
+        const scanFrame = () => {
+            if (!scanbotStream || !modal.classList.contains('active')) {
+                return;
+            }
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert',
+                });
+                
+                if (code) {
+                    console.log('[Scanbot Fallback] QR CODE DETECTED:', code.data);
+                    stopScanbotScanner();
+                    closeScanbotScanner();
+                    processScannedCode(code.data);
+                    return;
+                }
+            }
+            
+            if (scanbotStream && document.getElementById('scanbot-scanner-modal').classList.contains('active')) {
+                requestAnimationFrame(scanFrame);
+            }
+        };
+        
+        video.onloadedmetadata = () => {
+            video.play();
+            requestAnimationFrame(scanFrame);
+        };
+        
+    } catch (err) {
+        console.error('[Scanbot Fallback] Camera error:', err);
+        reader.innerHTML = '<div class="empty-state">Ошибка камеры: ' + err.message + '</div>';
+    }
+}
+
+function stopScanbotScanner() {
+    if (window.scanbotSdkInstance) {
+        try {
+            window.scanbotSdkInstance.stopScanner();
+        } catch (e) {
+            console.log('[Scanbot] Error stopping scanner:', e);
+        }
+        window.scanbotSdkInstance = null;
+    }
+    
+    if (scanbotStream) {
+        scanbotStream.getTracks().forEach(track => track.stop());
+        scanbotStream = null;
+    }
+}
+
+function closeScanbotScanner() {
+    const modal = document.getElementById('scanbot-scanner-modal');
+    modal.classList.remove('active');
+    
+    stopScanbotScanner();
+    
+    // Очищаем reader
+    const reader = document.getElementById('scanbot-reader');
+    if (reader) {
+        reader.innerHTML = '';
+    }
+}
+
+function handleManualInputScanbot() {
+    const input = document.getElementById('manual-code-scanbot');
+    const code = input.value.trim();
+    
+    if (code) {
+        closeScanbotScanner();
         processScannedCode(code);
         input.value = '';
     } else {
