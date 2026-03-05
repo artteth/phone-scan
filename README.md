@@ -1,0 +1,29 @@
+# Сканер рулонов ткани
+
+Мобильное веб-приложение для инвентаризации рулонов ткани с QR-кодами.
+
+## Ссылки
+
+- **GitHub:** https://github.com/artteth/phone-scan
+- **Google Sheets API:** https://script.google.com/macros/s/AKfycbxrD_B4A37h6QlyXgn4TX_nQYHgwGfkTAj4qVBD5-g_OM9-nMJjU1zhvIcMX4yztk36/exec
+
+## Технологии
+
+- HTML5 + JavaScript
+- html5-qrcode — сканирование QR-кодов через камеру
+- Google Sheets API — синхронизация данных
+
+## Использование
+
+1. Открыть приложение
+2. Нажать "Сканировать QR-код"
+3. Разрешить доступ к камере
+4. Навести на QR-код
+
+## Настройки
+
+Нажмите ⚙️ в правом верхнем углу для настройки частоты кадров сканера (FPS).
+
+## Версия
+
+v27
