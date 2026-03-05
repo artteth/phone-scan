@@ -1335,3 +1335,8 @@ function showToast(message, type = 'info') {
         toast.remove();
     }, 3000);
 }
+
+// Экспортируем функции в глобальную область видимости для onclick
+window.openZbarScanner = openZbarScanner;
+window.closeZbarScanner = closeZbarScanner;
+window.handleManualInputZbar = handleManualInputZbar;
