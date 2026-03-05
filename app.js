@@ -3,10 +3,11 @@
  * Сканирование QR-кодов, запись измерений, управление заказами
  */
 
-// ===== Constants =====
+// ИСПОЛЬЗУЕМ ЛОКАЛЬНЫЙ GOOGLE SHEETS API v1
+const GOOGLE_SHEETS_URL = '/api/v1/data';
+
 const STORAGE_KEY = 'fabric_inventory_data';
 const RECENT_SCANS_KEY = 'recent_scans';
-const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzcki4nX2ZDBs46mquFURIaD88yWDSjzxhdNJkcgn2Oe2G6tPahBm-auZTo_nXGsUDz/exec';
 const SYNC_STATUS_KEY = 'last_sync_time';
 
 // Test data codes for QR generation
@@ -97,7 +98,7 @@ async function syncWithGoogleSheets(showLoadingFlag = false) {
     console.log('Starting sync from Google Sheets...');
     
     try {
-        const url = GOOGLE_SHEETS_URL + '?action=getData';
+        const url = GOOGLE_SHEETS_URL;
         console.log('Fetching from:', url);
         
         const response = await fetch(url, {
@@ -203,49 +204,43 @@ async function syncToGoogleSheets() {
     
     isSyncing = true;
     updateSyncStatus('syncing');
-    console.log('Starting sync to Google Sheets...');
+    console.log('Starting sync to Google Sheets (single row update)...');
     
     try {
-        // Convert orders to array format for Google Sheets
+        // Convert orders to array format and send each roll individually
         const sheetsData = convertOrdersToSheetsFormat();
-        console.log('Sending data:', JSON.stringify({ action: 'saveData', data: sheetsData }));
+        console.log('Sending data:', JSON.stringify({ data: sheetsData }));
         
-        // Use GET request with data in URL to avoid POST issues
-        const dataStr = encodeURIComponent(JSON.stringify(sheetsData));
-        const url = `${GOOGLE_SHEETS_URL}?action=saveData&data=${dataStr}`;
-        console.log('Fetching from:', url);
-        
-        const response = await fetch(url, {
-            method: 'GET',
-            redirect: 'follow'
-        });
-        
-        console.log('Response status:', response.status);
-        
-        const text = await response.text();
-        console.log('Response:', text.substring(0, 200));
-        
-        if (!response.ok) {
-            throw new Error('Network response was not ok: ' + response.status);
-        }
-        
-        // Try to parse as JSON
-        let result;
-        try {
-            result = JSON.parse(text);
-            console.log('Save result:', result);
-        } catch (e) {
-            result = { success: true, message: 'Data sent' };
-        }
-        
-        if (result && result.error) {
-            throw new Error('Server error: ' + result.error);
+        // Use PUT request for single row update (no table flashing!)
+        // Send all rolls one by one
+        if (sheetsData.orders && sheetsData.orders.length > 0) {
+            for (const order of sheetsData.orders) {
+                const url = `${GOOGLE_SHEETS_URL}/${order.orderId}/${order.rollNumber}`;
+                console.log('PUT to:', url);
+                
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        factoryLength: order.factoryLength,
+                        measuredLength: order.measuredLength,
+                        shrinkage: order.shrinkage,
+                        status: order.status
+                    })
+                });
+                
+                if (!response.ok) {
+                    console.error('Error saving row:', order.orderId, order.rollNumber);
+                }
+            }
         }
         
         lastSyncTime = new Date().toISOString();
         localStorage.setItem(SYNC_STATUS_KEY, lastSyncTime);
         updateSyncStatus('success');
-        console.log('Data synced to Google Sheets successfully');
+        console.log('Data synced to Google Sheets successfully (no flashing!)');
         
     } catch (error) {
         console.error('Error syncing to Google Sheets:', error);
@@ -473,7 +468,7 @@ function initializeEventListeners() {
     document.getElementById('add-roll-btn').addEventListener('click', openAddRollModal);
     
     // Search
-    document.getElementById('order-search').addEventListener('input', handleSearch);
+    document.getElementById('order-search').addEventListener('change', handleSearch);
     
     // Sync buttons
     const manualSyncBtn = document.getElementById('manual-sync-btn');
@@ -522,6 +517,7 @@ function showPage(pageId) {
     document.getElementById(pageId).classList.add('active');
     
     if (pageId === 'orders-page') {
+        populateOrderSearch();
         renderOrdersList();
     }
 }
@@ -811,6 +807,23 @@ function handleSearch(e) {
     renderOrdersList(e.target.value);
 }
 
+function populateOrderSearch() {
+    const select = document.getElementById('order-search');
+    // Keep the first default option
+    select.innerHTML = '<option value="">Выберите номер заказа...</option>';
+    
+    // Get all order IDs and sort them
+    const orderIds = Object.keys(orders).sort();
+    
+    // Add each order as an option
+    orderIds.forEach(orderId => {
+        const option = document.createElement('option');
+        option.value = orderId;
+        option.textContent = 'Заказ ' + orderId;
+        select.appendChild(option);
+    });
+}
+
 // ===== Order Detail =====
 function showOrderDetail(orderId) {
     currentOrderId = orderId;
@@ -922,6 +935,12 @@ function createOrder(orderId, totalRolls, activeRollNumber = null) {
     };
     
     saveData();
+    
+    // Update the order dropdown if on orders page
+    const orderSearchSelect = document.getElementById('order-search');
+    if (orderSearchSelect) {
+        populateOrderSearch();
+    }
     
     if (activeRollNumber) {
         openRecordModal(orderId, activeRollNumber);
