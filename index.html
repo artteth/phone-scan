@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://unpkg.com/scanbot-web-sdk@5.1.0/dist/scanbot-sdk.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -178,7 +179,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v57</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v58</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -193,6 +194,10 @@
                     <button id="scan-btn-scanbot" class="btn btn-outline btn-large" style="margin-top: 12px;">
                         <span class="btn-icon">📸</span>
                         Сканировать (jsQR)
+                    </button>
+                    <button id="scan-btn-scanbot-sdk" class="btn btn-outline btn-large" style="margin-top: 12px;">
+                        <span class="btn-icon">🔎</span>
+                        Сканировать (Scanbot SDK)
                     </button>
                     <div class="divider">
                         <span>или</span>
@@ -305,7 +310,7 @@
                 </div>
             </div>
             
-            <!-- Scanbot Scanner Modal -->
+            <!-- jsQR Scanner Modal -->
             <div id="scanbot-scanner-modal" class="modal">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -319,6 +324,25 @@
                         <div class="manual-input" style="margin-top:8px;">
                             <input type="text" id="manual-code-scanbot" placeholder="напр. 2020_1" class="input">
                             <button id="manual-submit-scanbot" class="btn btn-primary">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Scanbot SDK Scanner Modal -->
+            <div id="scanbot-sdk-scanner-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Сканирование (Scanbot SDK)</h2>
+                        <button class="close-btn" id="close-scanbot-sdk-scanner">&times;</button>
+                    </div>
+                    <div id="scanbot-sdk-reader" class="qr-reader"></div>
+                    <p class="scanner-hint">🔎 Наведите камеру на QR-код (60 сек)</p>
+                    <div style="padding:20px;border-top:1px solid var(--border);">
+                        <p class="scanner-hint">Или введите вручную:</p>
+                        <div class="manual-input" style="margin-top:8px;">
+                            <input type="text" id="manual-code-scanbot-sdk" placeholder="напр. 2020_1" class="input">
+                            <button id="manual-submit-scanbot-sdk" class="btn btn-primary">OK</button>
                         </div>
                     </div>
                 </div>
@@ -1039,10 +1063,93 @@ function handleManualInputScanbot() {
     }
 }
 
+// ===== Scanbot SDK Scanner =====
+var scanbotSdkInstance = null;
+
+function openScanbotSdkScanner() {
+    console.log('[ScanbotSDK] Starting scanner...');
+    
+    var modal = document.getElementById('scanbot-sdk-scanner-modal');
+    modal.classList.add('active');
+    
+    var reader = document.getElementById('scanbot-sdk-reader');
+    reader.innerHTML = '<div class="empty-state">Инициализация Scanbot SDK...</div>';
+    
+    // Проверяем загрузку Scanbot SDK
+    if (typeof ScanbotSDK === 'undefined') {
+        console.error('[ScanbotSDK] SDK not loaded!');
+        reader.innerHTML = '<div class="empty-state">Ошибка: Scanbot SDK не загружен.<br>Обновите страницу.</div>';
+        return;
+    }
+    
+    try {
+        console.log('[ScanbotSDK] Initializing SDK (trial mode)...');
+        
+        // Создаём сканер
+        scanbotSdkInstance = new ScanbotSDK.Scanner({
+            containerId: 'scanbot-sdk-reader',
+            style: {
+                width: '100%',
+                height: '400px'
+            },
+            barcodeFilters: ['QR', 'EAN_13', 'EAN_8', 'CODE_128', 'CODE_39'],
+            onScan: function(result) {
+                console.log('[ScanbotSDK] Detected:', result.barcode.text);
+                if (result.barcode && result.barcode.text) {
+                    closeScanbotSdkScanner();
+                    processScannedCode(result.barcode.text);
+                }
+            },
+            onError: function(error) {
+                console.error('[ScanbotSDK] Error:', error);
+                reader.innerHTML = '<div class="empty-state">Ошибка: ' + error.message + '</div>';
+            }
+        });
+        
+        reader.innerHTML = '<div class="empty-state">Запуск камеры...</div>';
+        
+        // Запускаем сканер
+        scanbotSdkInstance.start();
+        console.log('[ScanbotSDK] Scanner started');
+        
+    } catch (err) {
+        console.error('[ScanbotSDK] Error:', err);
+        reader.innerHTML = '<div class="empty-state">Ошибка: ' + err.message + '</div>';
+    }
+}
+
+function closeScanbotSdkScanner() {
+    var modal = document.getElementById('scanbot-sdk-scanner-modal');
+    modal.classList.remove('active');
+    
+    if (scanbotSdkInstance) {
+        try {
+            scanbotSdkInstance.stop();
+        } catch(e) {}
+        scanbotSdkInstance = null;
+    }
+    
+    var reader = document.getElementById('scanbot-sdk-reader');
+    if (reader) reader.innerHTML = '';
+}
+
+function handleManualInputScanbotSdk() {
+    var input = document.getElementById('manual-code-scanbot-sdk');
+    var code = input.value.trim();
+    if (code) {
+        closeScanbotSdkScanner();
+        processScannedCode(code);
+        input.value = '';
+    }
+}
+
 document.getElementById('close-scanbot-scanner').onclick = closeScanbotScanner;
 document.getElementById('manual-submit-scanbot').onclick = handleManualInputScanbot;
 document.getElementById('scan-btn-scanbot').onclick = openScanbotScanner;
-console.log('[App] Scanbot scanner initialized');
+document.getElementById('scan-btn-scanbot-sdk').onclick = openScanbotSdkScanner;
+document.getElementById('close-scanbot-sdk-scanner').onclick = closeScanbotSdkScanner;
+document.getElementById('manual-submit-scanbot-sdk').onclick = handleManualInputScanbotSdk;
+console.log('[App] Scanners initialized');
 </script>
     <script src="app.js"></script>
 </body>
