@@ -714,52 +714,40 @@ function closeScanner() {
     }
 }
 
-// ===== ZBar Scanner (BarcodeDetector с polyfill для iOS) =====
+// ===== ZBar Scanner (jsQR - чистый JS, работает везде) =====
 async function openZbarScanner() {
-    console.log('[ZBar] Starting scanner...');
+    console.log('[ZBar] Starting scanner with jsQR...');
     const modal = document.getElementById('zbar-scanner-modal');
     modal.classList.add('active');
     
     const reader = document.getElementById('zbar-reader');
-    reader.innerHTML = '<div class="empty-state">Инициализация сканера...</div>';
+    reader.innerHTML = '<div class="empty-state">Инициализация камеры...</div>';
     
-    let detector;
-    
-    try {
-        console.log('[ZBar] Checking BarcodeDetector support...');
-        console.log('[ZBar] BarcodeDetector in window:', 'BarcodeDetector' in window);
-        
-        if ('BarcodeDetector' in window) {
-            console.log('[ZBar] Using native BarcodeDetector');
-            detector = new window.BarcodeDetector({
-                formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-            });
-        } else {
-            console.log('[ZBar] Loading polyfill from CDN...');
-            reader.innerHTML = '<div class="empty-state">Загрузка сканера...</div>';
-            const { BarcodeDetector } = await import('https://cdn.jsdelivr.net/npm/barcode-detector@2.2.2/+esm');
-            console.log('[ZBar] Polyfill loaded, BarcodeDetector:', BarcodeDetector);
-            detector = new BarcodeDetector({
-                formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-            });
-            console.log('[ZBar] Detector instance created');
-        }
-    } catch (err) {
-        console.error('[ZBar] BarcodeDetector loading error:', err);
-        reader.innerHTML = '<div class="empty-state">Ошибка загрузки: ' + err.message + '</div>';
+    // Проверяем наличие jsQR
+    if (typeof jsQR === 'undefined') {
+        console.error('[ZBar] jsQR not loaded!');
+        reader.innerHTML = '<div class="empty-state">Ошибка: jsQR не загружен. Обновите страницу.</div>';
         return;
     }
     
     try {
         console.log('[ZBar] Requesting camera access...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } 
+            video: { 
+                facingMode: 'environment',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
         });
-        console.log('[ZBar] Camera access granted, stream:', stream.id);
+        console.log('[ZBar] Camera access granted');
         
         zbarStream = stream;
         
-        // Создаём video элемент
+        // Создаём canvas для захвата кадра
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        // Создаём video элемент для отображения
         const video = document.createElement('video');
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
@@ -768,35 +756,42 @@ async function openZbarScanner() {
         
         reader.innerHTML = '';
         reader.appendChild(video);
-        console.log('[ZBar] Video element created and appended');
+        console.log('[ZBar] Video element created');
         
         // Сканируем кадры
-        const scanFrame = async () => {
+        const scanFrame = () => {
             if (!zbarStream || !modal.classList.contains('active')) {
                 console.log('[ZBar] Scan stopped');
                 return;
             }
             
-            try {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    // console.log('[ZBar] Detecting barcodes...');
-                    const barcodes = await detector.detect(video);
-                    if (barcodes.length > 0) {
-                        // Код найден!
-                        const code = barcodes[0].rawValue;
-                        console.log('[ZBar] CODE DETECTED:', code);
-                        
-                        // Останавливаем сканирование
-                        stopZbarScanner();
-                        
-                        // Обрабатываем код
-                        closeZbarScanner();
-                        processScannedCode(code);
-                        return;
-                    }
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                // Устанавливаем размер canvas по размеру видео
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                // Рисуем кадр на canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Получаем данные изображения
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Пытаемся найти QR код
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert',
+                });
+                
+                if (code) {
+                    console.log('[ZBar] QR CODE DETECTED:', code.data);
+                    
+                    // Останавливаем сканирование
+                    stopZbarScanner();
+                    
+                    // Обрабатываем код
+                    closeZbarScanner();
+                    processScannedCode(code.data);
+                    return;
                 }
-            } catch (err) {
-                console.log('[ZBar] Scan error:', err.message);
             }
             
             // Продолжаем сканирование
