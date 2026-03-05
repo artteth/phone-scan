@@ -37,12 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add focus listener to populate dropdown when opened
     const orderSearchSelect = document.getElementById('order-search');
     if (orderSearchSelect) {
-        orderSearchSelect.addEventListener('mousedown', () => {
-            console.log('Order search select clicked, populating...');
-            populateOrderSearch();
-        });
         orderSearchSelect.addEventListener('focus', () => {
-            console.log('Order search select focused, populating...');
+            console.log('Order search input focused, populating...');
             populateOrderSearch();
         });
     }
@@ -481,8 +477,11 @@ function initializeEventListeners() {
     // Add roll button
     document.getElementById('add-roll-btn').addEventListener('click', openAddRollModal);
     
-    // Search
-    document.getElementById('order-search').addEventListener('change', handleSearch);
+    // Search - using input event for real-time filtering with datalist
+    const orderSearchInput = document.getElementById('order-search');
+    if (orderSearchInput) {
+        orderSearchInput.addEventListener('input', handleSearch);
+    }
     
     // Sync buttons
     const manualSyncBtn = document.getElementById('manual-sync-btn');
@@ -829,14 +828,15 @@ function handleSearch(e) {
 }
 
 function populateOrderSearch() {
-    const select = document.getElementById('order-search');
+    const datalist = document.getElementById('order-datalist');
     console.log('populateOrderSearch called, orders:', Object.keys(orders));
-    if (!select) {
-        console.error('order-search select not found!');
+    if (!datalist) {
+        console.error('order-datalist not found!');
         return;
     }
-    // Keep the first default option
-    select.innerHTML = '<option value="">Выберите номер заказа...</option>';
+    
+    // Clear existing options
+    datalist.innerHTML = '';
     
     // Get all order IDs and sort them
     const orderIds = Object.keys(orders).sort();
@@ -846,10 +846,9 @@ function populateOrderSearch() {
     orderIds.forEach(orderId => {
         const option = document.createElement('option');
         option.value = orderId;
-        option.textContent = 'Заказ ' + orderId;
-        select.appendChild(option);
+        datalist.appendChild(option);
     });
-    console.log('Dropdown options added, count:', orderIds.length);
+    console.log('Datalist options added, count:', orderIds.length);
 }
 
 // ===== Order Detail =====
