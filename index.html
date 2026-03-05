@@ -10,7 +10,6 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <script src="https://unpkg.com/scanbot-sdk@4.17.0/web/scanbot.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -314,7 +313,7 @@
                         <button class="close-btn" id="close-scanbot-scanner">&times;</button>
                     </div>
                     <div id="scanbot-reader" class="qr-reader"></div>
-                    <p class="scanner-hint">📸 Scanbot SDK (60 сек бесплатно)</p>
+                    <p class="scanner-hint">📸 Сканирование через камеру (jsQR)</p>
                     <div style="padding:20px;border-top:1px solid var(--border);">
                         <p class="scanner-hint">Или введите вручную:</p>
                         <div class="manual-input" style="margin-top:8px;">
@@ -910,62 +909,101 @@ async function openScanbotScanner() {
     modal.classList.add('active');
     
     var reader = document.getElementById('scanbot-reader');
-    reader.innerHTML = '<div class="empty-state">Инициализация Scanbot SDK...</div>';
+    reader.innerHTML = '<div class="empty-state">Инициализация...</div>';
     
-    // Проверяем загрузку Scanbot
-    if (typeof ScanbotSDK === 'undefined') {
-        console.error('[Scanbot] SDK not loaded!');
-        reader.innerHTML = '<div class="empty-state">Ошибка: Scanbot SDK не загружен.<br>Обновите страницу.</div>';
+    // Проверяем загрузку jsQR (уже загружен)
+    if (typeof jsQR === 'undefined') {
+        console.error('[Scanbot] jsQR not loaded!');
+        reader.innerHTML = '<div class="empty-state">Ошибка: jsQR не загружен.<br>Обновите страницу.</div>';
         return;
     }
     
-    try {
-        console.log('[Scanbot] Initializing SDK (no license needed)...');
+    // Используем jsQR как основной сканер (аналогично ZBar)
+    console.log('[Scanbot] Using jsQR for scanning...');
+    openScanbotWithJsQR(modal, reader);
+}
+
+// Scanbot сканер на базе jsQR
+function openScanbotWithJsQR(modal, reader) {
+    reader.innerHTML = '<div class="empty-state">Запуск камеры...</div>';
+    
+    navigator.mediaDevices.getUserMedia({ 
+        video: { 
+            facingMode: 'environment', 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 } 
+        } 
+    }).then(function(stream) {
+        console.log('[Scanbot] Camera access granted');
+        window.scanbotStream = stream;
         
-        // Инициализируем Scanbot без лицензии
-        var sdk = new ScanbotSDK({
-            licenseKey: '',  // Без лицензии - 60 секунд
-            engine: 'WASM'
-        });
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d', { willReadFrequently: true });
         
-        await sdk.initialize();
-        console.log('[Scanbot] SDK initialized');
+        var video = document.createElement('video');
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.autoplay = true;
+        video.muted = true;
         
-        // Создаём сканер
-        reader.innerHTML = '<div class="empty-state">Запуск камеры...</div>';
+        reader.innerHTML = '';
+        reader.appendChild(video);
+        console.log('[Scanbot] Video element created');
         
-        var scanner = sdk.createBarcodeScanner({
-            container: reader,
-            style: {
-                width: '100%',
-                height: '400px'
-            },
-            barcodeFilters: ['QR', 'EAN_13', 'EAN_8', 'CODE_128', 'CODE_39'],
-            onBarcodeScanned: function(result) {
-                console.log('[Scanbot] Detected:', result.barcode.value);
-                closeScanbotScanner();
-                processScannedCode(result.barcode.value);
-            },
-            onError: function(error) {
-                console.error('[Scanbot] Error:', error);
+        var scanFrame = function() {
+            if (!window.scanbotStream || !modal.classList.contains('active')) {
+                return;
             }
-        });
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                
+                if (code) {
+                    console.log('[Scanbot] QR CODE DETECTED:', code.data);
+                    stopScanbotScanner();
+                    closeScanbotScanner();
+                    processScannedCode(code.data);
+                    return;
+                }
+            }
+            
+            if (window.scanbotStream && modal.classList.contains('active')) {
+                requestAnimationFrame(scanFrame);
+            }
+        };
         
-        await scanner.start();
-        console.log('[Scanbot] Scanner started');
+        video.onloadedmetadata = function() {
+            console.log('[Scanbot] Video metadata loaded, playing...');
+            video.play();
+            requestAnimationFrame(scanFrame);
+        };
         
-        // Сохраняем сканер для закрытия
-        window.scanbotScanner = scanner;
-        
-    } catch (err) {
-        console.error('[Scanbot] Error:', err);
-        reader.innerHTML = '<div class="empty-state">Ошибка: ' + err.message + '</div>';
+    }).catch(function(err) {
+        console.error('[Scanbot] Camera error:', err);
+        reader.innerHTML = '<div class="empty-state">Ошибка камеры: ' + err.message + '</div>';
+    });
+}
+
+function stopScanbotScanner() {
+    if (window.scanbotStream) {
+        window.scanbotStream.getTracks().forEach(function(track) { track.stop(); });
+        window.scanbotStream = null;
     }
 }
 
 function closeScanbotScanner() {
     var modal = document.getElementById('scanbot-scanner-modal');
     modal.classList.remove('active');
+    
+    // Останавливаем поток камеры
+    if (window.scanbotStream) {
+        window.scanbotStream.getTracks().forEach(function(track) { track.stop(); });
+        window.scanbotStream = null;
+    }
     
     if (window.scanbotScanner) {
         try {

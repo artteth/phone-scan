@@ -854,7 +854,7 @@ function handleManualInputZbar() {
     }
 }
 
-// ===== Scanbot Scanner =====
+// ===== Scanbot Scanner (jsQR) =====
 async function openScanbotScanner() {
     console.log('[Scanbot] Starting scanner...');
     const modal = document.getElementById('scanbot-scanner-modal');
