@@ -170,7 +170,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v33</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v34</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -242,8 +242,8 @@
             </header>
             <main class="main-content">
                 <div class="search-bar">
-                    <input type="text" id="order-search" class="input" list="order-datalist" placeholder="Выберите номер заказа...">
-                    <datalist id="order-datalist"></datalist>
+                    <input type="text" id="order-search" class="input" placeholder="Введите номер заказа...">
+                    <div id="order-suggestions" style="display:none; background:var(--surface); border:2px solid var(--border); border-radius:var(--radius-sm); max-height:200px; overflow-y:auto; margin-top:4px;"></div>
                 </div>
                 <div id="orders-list" class="orders-list"></div>
                 <div style="display: flex; gap: 12px;">
@@ -518,7 +518,7 @@ const settingsBtn=document.getElementById('settings-btn');if(settingsBtn){settin
 const closeSettingsBtn=document.getElementById('close-settings');if(closeSettingsBtn){closeSettingsBtn.addEventListener('click',closeSettingsModal);}
 const fpsSlider=document.getElementById('fps-slider');if(fpsSlider){fpsSlider.value=scannerFps;document.getElementById('fps-value').textContent=scannerFps;fpsSlider.addEventListener('input',(e)=>{const val=parseInt(e.target.value);scannerFps=val;localStorage.setItem('scannerFps',val);document.getElementById('fps-value').textContent=val;});}}
 
-function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page')renderOrdersList();}
+function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page'){populateOrderSuggestions();renderOrdersList();}}
 function openScanner(){const modal=document.getElementById('scanner-modal');modal.classList.add('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(()=>{});}html5QrcodeScanner=new Html5QrcodeScanner('qr-reader',{fps:scannerFps,qrbox:{width:250,height:250}},false);html5QrcodeScanner.render(handleQRCodeScan,(error)=>{console.log('Scanner error:',error);});}
 function closeScanner(){const modal=document.getElementById('scanner-modal');modal.classList.remove('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(err=>console.log('Error clearing scanner:',err));}}
 
@@ -548,6 +548,93 @@ function createOrder(orderId,totalRolls,activeRollNumber=null){const rolls=[];fo
 function openAddRollModal(){const rollNumber=orders[currentOrderId].rolls.length+1;openRecordModal(currentOrderId,rollNumber);}
 function renderQRCodePage(){const container=document.getElementById('qr-codes-grid');container.innerHTML=TEST_CODES.map(code=>'<div class="qr-code-item"><canvas id="qr-'+code+'"></canvas><div class="qr-code-label">'+code+'</div></div>').join('');TEST_CODES.forEach(code=>{const canvas=document.getElementById('qr-'+code);if(canvas){QRCode.toCanvas(canvas,code,{width:120,margin:2,color:{dark:'#1e293b',light:'#ffffff'}});}});}
 function showToast(message,type='info'){let container=document.querySelector('.toast-container');if(!container){container=document.createElement('div');container.className='toast-container';document.body.appendChild(container);}const toast=document.createElement('div');toast.className='toast '+type;toast.textContent=message;container.appendChild(toast);setTimeout(()=>{toast.remove();},3000);}
+
+// ===== Custom Dropdown for Order Search =====
+function populateOrderSuggestions() {
+    const input = document.getElementById('order-search');
+    const suggestionsContainer = document.getElementById('order-suggestions');
+    
+    console.log('=== populateOrderSuggestions called ===');
+    console.log('orders:', orders);
+    console.log('suggestionsContainer:', suggestionsContainer);
+    
+    if (!suggestionsContainer) {
+        console.error('suggestions container not found!');
+        return;
+    }
+    
+    // Clear previous suggestions
+    suggestionsContainer.innerHTML = '';
+    
+    // Get all order IDs
+    const orderIds = Object.keys(orders);
+    console.log('orderIds:', orderIds);
+    
+    if (orderIds.length === 0) {
+        suggestionsContainer.style.display = 'none';
+        return;
+    }
+    
+    // Sort and add each order as clickable button
+    orderIds.sort().forEach(orderId => {
+        const btn = document.createElement('div');
+        btn.style.cssText = 'padding:12px 16px; cursor:pointer; border-bottom:1px solid var(--border);';
+        btn.textContent = 'Заказ ' + orderId;
+        btn.onclick = function() {
+            input.value = orderId;
+            suggestionsContainer.style.display = 'none';
+            renderOrdersList(orderId);
+        };
+        btn.onmouseover = function() {
+            btn.style.background = 'var(--surface-hover)';
+        };
+        btn.onmouseout = function() {
+            btn.style.background = '';
+        };
+        suggestionsContainer.appendChild(btn);
+    });
+    
+    suggestionsContainer.style.display = 'block';
+    console.log('Added', orderIds.length, 'suggestions');
+}
+
+// Add event listeners for order search
+document.addEventListener('DOMContentLoaded', function() {
+    const orderSearchInput = document.getElementById('order-search');
+    if (orderSearchInput) {
+        // Show suggestions on focus
+        orderSearchInput.addEventListener('focus', function() {
+            console.log('order search focused');
+            populateOrderSuggestions();
+        });
+        
+        // Also show on click
+        orderSearchInput.addEventListener('click', function() {
+            console.log('order search clicked');
+            populateOrderSuggestions();
+        });
+        
+        // Filter as user types
+        orderSearchInput.addEventListener('input', function() {
+            const filter = this.value.toLowerCase();
+            const suggestionsContainer = document.getElementById('order-suggestions');
+            const buttons = suggestionsContainer.querySelectorAll('div');
+            buttons.forEach(btn => {
+                const text = btn.textContent.toLowerCase();
+                btn.style.display = text.includes(filter) ? '' : 'none';
+            });
+        });
+    }
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        const input = document.getElementById('order-search');
+        const suggestionsContainer = document.getElementById('order-suggestions');
+        if (e.target !== input && e.target !== suggestionsContainer) {
+            suggestionsContainer.style.display = 'none';
+        }
+    });
+});
     </script>
 </body>
 </html>
