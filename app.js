@@ -29,7 +29,9 @@ let forceSync = false;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('=== App DOMContentLoaded ===');
     loadData();
+    console.log('After loadData, orders:', Object.keys(orders).length, 'orders');
     initializeEventListeners();
     renderRecentScans();
     renderQRCodePage();
@@ -38,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const orderSearchSelect = document.getElementById('order-search');
     if (orderSearchSelect) {
         orderSearchSelect.addEventListener('focus', () => {
-            console.log('Order search input focused, populating...');
+            console.log('=== Order search input focused ===');
             populateOrderSearch();
         });
     }
@@ -524,7 +526,7 @@ function initializeEventListeners() {
 
 // ===== Navigation =====
 function showPage(pageId) {
-    console.log('showPage called with:', pageId);
+    console.log('=== showPage called with:', pageId, '===');
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
@@ -532,10 +534,9 @@ function showPage(pageId) {
     targetPage.classList.add('active');
     
     if (pageId === 'orders-page') {
-        console.log('Going to orders page, calling populateOrderSearch');
-        // Use setTimeout to ensure DOM is ready
+        console.log('On orders page, orders object has:', Object.keys(orders).length, 'orders');
+        console.log('Calling populateOrderSearch...');
         setTimeout(() => {
-            console.log('setTimeout fired, populating orders');
             populateOrderSearch();
             renderOrdersList();
         }, 100);
@@ -828,27 +829,40 @@ function handleSearch(e) {
 }
 
 function populateOrderSearch() {
+    console.log('=== populateOrderSearch called ===');
     const datalist = document.getElementById('order-datalist');
-    console.log('populateOrderSearch called, orders:', Object.keys(orders));
+    console.log('orders object:', orders);
+    console.log('datalist element:', datalist);
+    
     if (!datalist) {
-        console.error('order-datalist not found!');
+        console.error('ERROR: order-datalist not found in DOM!');
         return;
     }
     
     // Clear existing options
     datalist.innerHTML = '';
     
-    // Get all order IDs and sort them
-    const orderIds = Object.keys(orders).sort();
-    console.log('Order IDs:', orderIds);
+    // Get all order IDs from orders object
+    const orderIds = Object.keys(orders);
+    console.log('All order IDs:', orderIds);
     
-    // Add each order as an option
+    if (orderIds.length === 0) {
+        console.log('WARNING: No orders found in orders object!');
+        return;
+    }
+    
+    // Sort order IDs
+    orderIds.sort();
+    console.log('Sorted order IDs:', orderIds);
+    
+    // Add each order as an option to datalist
     orderIds.forEach(orderId => {
         const option = document.createElement('option');
-        option.value = orderId;
+        option.value = orderId;  // This is what shows in the dropdown
         datalist.appendChild(option);
     });
-    console.log('Datalist options added, count:', orderIds.length);
+    
+    console.log('SUCCESS: Added', orderIds.length, 'options to datalist');
 }
 
 // ===== Order Detail =====
