@@ -170,7 +170,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v37</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v38</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -377,6 +377,9 @@
                         <input type="range" id="fps-slider" min="1" max="30" value="10">
                         <p class="settings-info">Более высокая частота = быстрее сканирование, но больше энергопотребление</p>
                     </div>
+                    <div class="settings-group">
+                        <p class="settings-info" style="color: var(--success);">✅ Доступны: кнопка фонарика 🔦, зум-слайдер 🔍</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -524,7 +527,7 @@ const closeSettingsBtn=document.getElementById('close-settings');if(closeSetting
 const fpsSlider=document.getElementById('fps-slider');if(fpsSlider){fpsSlider.value=scannerFps;document.getElementById('fps-value').textContent=scannerFps;fpsSlider.addEventListener('input',(e)=>{const val=parseInt(e.target.value);scannerFps=val;localStorage.setItem('scannerFps',val);document.getElementById('fps-value').textContent=val;});}}
 
 function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page'){populateOrderSuggestions();renderOrdersList();}}
-function openScanner(){const modal=document.getElementById('scanner-modal');modal.classList.add('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(()=>{});}html5QrcodeScanner=new Html5QrcodeScanner('qr-reader',{fps:scannerFps,qrbox:{width:250,height:250}},false);html5QrcodeScanner.render(handleQRCodeScan,(error)=>{console.log('Scanner error:',error);});}
+function openScanner(){const modal=document.getElementById('scanner-modal');modal.classList.add('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(()=>{});}html5QrcodeScanner=new Html5QrcodeScanner('qr-reader',{fps:scannerFps,qrbox:{width:250,height:250},useBarCodeDetectorIfSupported:true,showTorchButtonIfSupported:true,showZoomSliderIfSupported:true,rememberLastUsedCamera:true},false);html5QrcodeScanner.render(handleQRCodeScan,(error)=>{console.log('Scanner error:',error);});}
 function closeScanner(){const modal=document.getElementById('scanner-modal');modal.classList.remove('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(err=>console.log('Error clearing scanner:',err));}}
 
 // Settings modal functions
