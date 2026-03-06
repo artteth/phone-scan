@@ -180,7 +180,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v66</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v67</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -298,7 +298,16 @@
                                     <option value="1920">Высокое</option>
                                 </select>
                             </label>
+                            <label style="font-size:0.8rem;">
+                                Инверсия:
+                                <select id="zbar-inversion" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="dontInvert">Не инвертировать</option>
+                                    <option value="doInvert" selected>Инвертировать (точнее)</option>
+                                    <option value="invertFirst">Сначала инвертировать</option>
+                                </select>
+                            </label>
                         </div>
+                        <button id="zbar-reset-settings" style="margin-top:8px;padding:4px 12px;font-size:0.75rem;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">🔄 Сбросить настройки</button>
                     </div>
                     
                     <div style="padding:20px;border-top:1px solid var(--border);">
@@ -339,6 +348,38 @@
                     </div>
                     <div id="jsqr-reader" class="qr-reader"></div>
                     <p class="scanner-hint">🔎 Наведите камеру на QR-код</p>
+                    
+                    <!-- jsQR настройки -->
+                    <div style="padding:12px;background:#f5f5f5;border-top:1px solid var(--border);">
+                        <p style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">⚙️ Настройки jsQR:</p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <label style="font-size:0.8rem;">
+                                Камера:
+                                <select id="jsqr-camera" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="environment" selected>Задняя</option>
+                                    <option value="user">Передняя</option>
+                                </select>
+                            </label>
+                            <label style="font-size:0.8rem;">
+                                Качество:
+                                <select id="jsqr-quality" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="640">Низкое</option>
+                                    <option value="1280" selected>Среднее</option>
+                                    <option value="1920">Высокое</option>
+                                </select>
+                            </label>
+                            <label style="font-size:0.8rem;">
+                                Инверсия:
+                                <select id="jsqr-inversion" style="padding:4px;border-radius:4px;border:1px solid var(--border);">
+                                    <option value="dontInvert">Не инвертировать</option>
+                                    <option value="doInvert" selected>Инвертировать (точнее)</option>
+                                    <option value="invertFirst">Сначала инвертировать</option>
+                                </select>
+                            </label>
+                        </div>
+                        <button id="jsqr-reset-settings" style="margin-top:8px;padding:4px 12px;font-size:0.75rem;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">🔄 Сбросить настройки</button>
+                    </div>
+                    
                     <div style="padding:20px;border-top:1px solid var(--border);">
                         <p class="scanner-hint">Или введите вручную:</p>
                         <div class="manual-input" style="margin-top:8px;">
@@ -795,7 +836,8 @@ function openZbarScanner() {
     var zbarCamera = document.getElementById('zbar-camera').value || 'environment';
     var zbarFps = parseInt(document.getElementById('zbar-fps').value) || 10;
     var zbarQuality = parseInt(document.getElementById('zbar-quality').value) || 1280;
-    console.log('[ZBar] Settings - Camera:', zbarCamera, 'FPS:', zbarFps, 'Quality:', zbarQuality);
+    var zbarInversion = document.getElementById('zbar-inversion').value || 'doInvert';
+    console.log('[ZBar] Settings - Camera:', zbarCamera, 'FPS:', zbarFps, 'Quality:', zbarQuality, 'Inversion:', zbarInversion);
     
     const modal = document.getElementById('zbar-scanner-modal');
     modal.classList.add('active');
@@ -856,8 +898,8 @@ function openZbarScanner() {
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                // Используем 'doInvert' для лучшего распознавания под углами
-                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'doInvert' });
+                // Используем настройку инверсии из UI
+                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: zbarInversion });
                 
                 if (code) {
                     console.log('[ZBar] QR CODE DETECTED:', code.data);
@@ -919,6 +961,7 @@ function loadZbarSettings() {
     var savedCamera = localStorage.getItem('zbarCamera');
     var savedFps = localStorage.getItem('zbarFps');
     var savedQuality = localStorage.getItem('zbarQuality');
+    var savedInversion = localStorage.getItem('zbarInversion');
     
     if (savedCamera) {
         document.getElementById('zbar-camera').value = savedCamera;
@@ -929,6 +972,9 @@ function loadZbarSettings() {
     if (savedQuality) {
         document.getElementById('zbar-quality').value = savedQuality;
     }
+    if (savedInversion) {
+        document.getElementById('zbar-inversion').value = savedInversion;
+    }
     console.log('[ZBar] Settings loaded from localStorage');
 }
 
@@ -937,12 +983,30 @@ function saveZbarSettings() {
     var camera = document.getElementById('zbar-camera').value;
     var fps = document.getElementById('zbar-fps').value;
     var quality = document.getElementById('zbar-quality').value;
+    var inversion = document.getElementById('zbar-inversion').value;
     
     localStorage.setItem('zbarCamera', camera);
     localStorage.setItem('zbarFps', fps);
     localStorage.setItem('zbarQuality', quality);
+    localStorage.setItem('zbarInversion', inversion);
     
-    console.log('[ZBar] Settings saved to localStorage:', { camera, fps, quality });
+    console.log('[ZBar] Settings saved to localStorage:', { camera, fps, quality, inversion });
+}
+
+// Сброс настроек ZBar
+function resetZbarSettings() {
+    localStorage.removeItem('zbarCamera');
+    localStorage.removeItem('zbarFps');
+    localStorage.removeItem('zbarQuality');
+    localStorage.removeItem('zbarInversion');
+    
+    document.getElementById('zbar-camera').value = 'environment';
+    document.getElementById('zbar-fps').value = '10';
+    document.getElementById('zbar-quality').value = '1280';
+    document.getElementById('zbar-inversion').value = 'doInvert';
+    
+    saveZbarSettings();
+    console.log('[ZBar] Settings reset to default');
 }
 
 // Логи для настроек ZBar
@@ -957,6 +1021,13 @@ document.getElementById('zbar-quality').onchange = function() {
 document.getElementById('zbar-camera').onchange = function() {
     saveZbarSettings();
     console.log('[ZBar] Camera changed to:', this.value);
+};
+document.getElementById('zbar-inversion').onchange = function() {
+    saveZbarSettings();
+    console.log('[ZBar] Inversion changed to:', this.value);
+};
+document.getElementById('zbar-reset-settings').onclick = function() {
+    resetZbarSettings();
 };
 
 // Загружаем настройки при запуске
@@ -973,6 +1044,12 @@ function openJsQRScanner() {
     
     console.log('[jsQR] Starting scanner...');
     
+    // Получаем настройки
+    var jsqrCamera = document.getElementById('jsqr-camera').value || 'environment';
+    var jsqrQuality = parseInt(document.getElementById('jsqr-quality').value) || 1280;
+    var jsqrInversion = document.getElementById('jsqr-inversion').value || 'doInvert';
+    console.log('[jsQR] Settings - Camera:', jsqrCamera, 'Quality:', jsqrQuality, 'Inversion:', jsqrInversion);
+    
     var modal = document.getElementById('jsqr-scanner-modal');
     modal.classList.add('active');
     
@@ -987,17 +1064,20 @@ function openJsQRScanner() {
     }
     
     console.log('[jsQR] Using jsQR for scanning...');
-    openJsQRWithCamera(modal, reader);
+    openJsQRWithCamera(modal, reader, jsqrCamera, jsqrQuality, jsqrInversion);
 }
 
-function openJsQRWithCamera(modal, reader) {
+function openJsQRWithCamera(modal, reader, jsqrCamera, jsqrQuality, jsqrInversion) {
     reader.innerHTML = '<div class="empty-state">Запуск камеры...</div>';
+    
+    var videoWidth = jsqrQuality;
+    var videoHeight = Math.round(jsqrQuality * 0.75);
     
     navigator.mediaDevices.getUserMedia({ 
         video: { 
-            facingMode: 'environment', 
-            width: { ideal: 1280 }, 
-            height: { ideal: 720 } 
+            facingMode: jsqrCamera, 
+            width: { ideal: videoWidth }, 
+            height: { ideal: videoHeight } 
         } 
     }).then(function(stream) {
         console.log('[jsQR] Camera access granted');
@@ -1028,8 +1108,8 @@ function openJsQRWithCamera(modal, reader) {
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                // Используем 'doInvert' для лучшего распознавания под углами
-                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'doInvert' });
+                // Используем настройку инверсии из UI
+                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: jsqrInversion });
                 
                 if (code) {
                     console.log('[jsQR] QR CODE DETECTED:', code.data);
@@ -1083,6 +1163,72 @@ function handleManualInputJsQR() {
 }
 
 console.log('[App] jsQR scanner functions loaded');
+
+// ===== jsQR Scanner Settings =====
+// Загрузка настроек jsQR из localStorage
+function loadJsQRSettings() {
+    var savedCamera = localStorage.getItem('jsqrCamera');
+    var savedQuality = localStorage.getItem('jsqrQuality');
+    var savedInversion = localStorage.getItem('jsqrInversion');
+    
+    if (savedCamera) {
+        document.getElementById('jsqr-camera').value = savedCamera;
+    }
+    if (savedQuality) {
+        document.getElementById('jsqr-quality').value = savedQuality;
+    }
+    if (savedInversion) {
+        document.getElementById('jsqr-inversion').value = savedInversion;
+    }
+    console.log('[jsQR] Settings loaded from localStorage');
+}
+
+// Сохранение настроек jsQR в localStorage
+function saveJsQRSettings() {
+    var camera = document.getElementById('jsqr-camera').value;
+    var quality = document.getElementById('jsqr-quality').value;
+    var inversion = document.getElementById('jsqr-inversion').value;
+    
+    localStorage.setItem('jsqrCamera', camera);
+    localStorage.setItem('jsqrQuality', quality);
+    localStorage.setItem('jsqrInversion', inversion);
+    
+    console.log('[jsQR] Settings saved to localStorage:', { camera, quality, inversion });
+}
+
+// Сброс настроек jsQR
+function resetJsQRSettings() {
+    localStorage.removeItem('jsqrCamera');
+    localStorage.removeItem('jsqrQuality');
+    localStorage.removeItem('jsqrInversion');
+    
+    document.getElementById('jsqr-camera').value = 'environment';
+    document.getElementById('jsqr-quality').value = '1280';
+    document.getElementById('jsqr-inversion').value = 'doInvert';
+    
+    saveJsQRSettings();
+    console.log('[jsQR] Settings reset to default');
+}
+
+// Слушатели для настроек jsQR
+document.getElementById('jsqr-quality').onchange = function() {
+    saveJsQRSettings();
+    console.log('[jsQR] Quality changed to:', this.value);
+};
+document.getElementById('jsqr-camera').onchange = function() {
+    saveJsQRSettings();
+    console.log('[jsQR] Camera changed to:', this.value);
+};
+document.getElementById('jsqr-inversion').onchange = function() {
+    saveJsQRSettings();
+    console.log('[jsQR] Inversion changed to:', this.value);
+};
+document.getElementById('jsqr-reset-settings').onclick = function() {
+    resetJsQRSettings();
+};
+
+// Загружаем настройки при запуске
+loadJsQRSettings();
 
 // ===== Scanbot SDK Scanner =====
 var scanbotOpening = false;
