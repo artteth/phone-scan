@@ -201,7 +201,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v69</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v70</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -726,6 +726,9 @@ async function trySyncPendingData() {
     if (document.getElementById('order-detail-page').classList.contains('active') && currentOrderId) {
         renderOrderDetail(currentOrderId);
     }
+    
+    // Always re-render recent scans to update sync status
+    renderRecentScans();
     
     updateSyncStatusUI();
 }
