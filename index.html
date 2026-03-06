@@ -208,7 +208,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v71</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v72</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -542,21 +542,32 @@
         <div id="settings-modal" class="modal">
             <div class="modal-content" style="max-width: 360px;">
                 <div class="modal-header">
-                    <h2>⚙️ Настройки сканера</h2>
+                    <h2>⚙️ Настройки</h2>
                     <button class="close-btn" id="close-settings">&times;</button>
                 </div>
                 <div style="padding: 20px;">
                     <div class="settings-group">
                         <label>Частота кадров (FPS)</label>
                         <div class="range-display">
-                            <span>Медленнее (экономия батареи)</span>
+                            <span>Медленнее</span>
                             <span id="fps-value">10</span>
                         </div>
                         <input type="range" id="fps-slider" min="1" max="60" value="10">
-                        <p class="settings-info">Более высокая частота = быстрее сканирование, но больше энергопотребление</p>
+                        <p class="settings-info">Более высокая частота = быстрее сканирование</p>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+                    <div class="settings-group">
+                        <label for="sync-interval-input">Интервал автоотправки (секунды)</label>
+                        <input type="number" id="sync-interval-input" class="input" min="5" max="300" value="12" style="width: 100%;">
+                        <p class="settings-info">Как часто пытаться отправить данные (от 5 до 300 сек)</p>
                     </div>
                     <div class="settings-group">
-                        <p class="settings-info" style="color: var(--warning);">ℹ️ Фонарик и зум появятся автоматически, если устройство их поддерживает</p>
+                        <label for="recent-scans-input">Количество последних сканирований</label>
+                        <input type="number" id="recent-scans-input" class="input" min="1" max="10000" value="5" style="width: 100%;">
+                        <p class="settings-info">Сколько последних сканирований показывать (1-10000)</p>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button id="save-settings-btn" class="btn btn-primary" style="flex: 1;">Сохранить</button>
                     </div>
                 </div>
             </div>
@@ -588,6 +599,8 @@ const PENDING_SYNC_KEY = 'pending_sync_queue';
 const TEST_CODES = ['2020_1','2020_2','2020_3','2020_4','2020_5','2021_1','2021_2','2021_3','2022_1','2022_2','2022_3','2022_4'];
 let orders = {}, recentScans = [], currentOrderId = null, currentRollNumber = null, html5QrcodeScanner = null;
 let scannerFps = localStorage.getItem('scannerFps') ? parseInt(localStorage.getItem('scannerFps')) : 10;
+let syncIntervalMs = localStorage.getItem('syncIntervalMs') ? parseInt(localStorage.getItem('syncIntervalMs')) : 12000;
+let maxRecentScans = localStorage.getItem('maxRecentScans') ? parseInt(localStorage.getItem('maxRecentScans')) : 5;
 let pendingSyncQueue = [];
 let syncInterval = null;
 let isOnline = navigator.onLine;
@@ -661,14 +674,14 @@ function isInPendingSyncQueue(orderId, rollNumber) {
 
 function startSyncInterval() {
     if (syncInterval) clearInterval(syncInterval);
-    // Try to sync every 12 seconds (between 10-15 seconds as requested)
+    // Try to sync every X seconds (configurable)
     syncInterval = setInterval(() => {
         console.log('Auto-sync interval triggered');
         if (pendingSyncQueue.length > 0) {
             trySyncPendingData();
         }
-    }, 12000);
-    console.log('Sync interval started (12 seconds)');
+    }, syncIntervalMs);
+    console.log('Sync interval started (' + (syncIntervalMs/1000) + ' seconds)');
 }
 
 async function trySyncPendingData() {
@@ -926,6 +939,7 @@ function initializeEventListeners(){document.getElementById('scan-btn').addEvent
 const settingsBtn=document.getElementById('settings-btn');if(settingsBtn){settingsBtn.addEventListener('click',openSettingsModal);}
 const closeSettingsBtn=document.getElementById('close-settings');if(closeSettingsBtn){closeSettingsBtn.addEventListener('click',closeSettingsModal);}
 const fpsSlider=document.getElementById('fps-slider');if(fpsSlider){fpsSlider.value=scannerFps;document.getElementById('fps-value').textContent=scannerFps;fpsSlider.addEventListener('input',(e)=>{const val=parseInt(e.target.value);scannerFps=val;localStorage.setItem('scannerFps',val);document.getElementById('fps-value').textContent=val;});}}
+const saveSettingsBtn=document.getElementById('save-settings-btn');if(saveSettingsBtn){saveSettingsBtn.addEventListener('click',saveSettings);}
 
 function showPage(pageId){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');if(pageId==='orders-page'){populateOrderSuggestions();renderOrdersList();}}
 function openScanner(){
@@ -962,13 +976,59 @@ function openScanner(){
 function closeScanner(){const modal=document.getElementById('scanner-modal');modal.classList.remove('active');if(html5QrcodeScanner){html5QrcodeScanner.clear().catch(err=>console.log('Error clearing scanner:',err));}}
 
 // Settings modal functions
-function openSettingsModal(){const modal=document.getElementById('settings-modal');if(modal){modal.classList.add('active');}}
-function closeSettingsModal(){const modal=document.getElementById('settings-modal');if(modal){modal.classList.remove('active');}}
+function openSettingsModal(){
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        // Load current values
+        document.getElementById('sync-interval-input').value = syncIntervalMs / 1000;
+        document.getElementById('recent-scans-input').value = maxRecentScans;
+        modal.classList.add('active');
+    }
+}
+
+function closeSettingsModal(){
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function saveSettings() {
+    const intervalSeconds = parseInt(document.getElementById('sync-interval-input').value);
+    const recentCount = parseInt(document.getElementById('recent-scans-input').value);
+    
+    // Validate
+    if (intervalSeconds < 5 || intervalSeconds > 300) {
+        showToast('Интервал должен быть от 5 до 300 секунд', 'error');
+        return;
+    }
+    if (recentCount < 1 || recentCount > 10000) {
+        showToast('Количество сканирований должно быть от 1 до 10000', 'error');
+        return;
+    }
+    
+    // Save to localStorage
+    syncIntervalMs = intervalSeconds * 1000;
+    maxRecentScans = recentCount;
+    localStorage.setItem('syncIntervalMs', syncIntervalMs);
+    localStorage.setItem('maxRecentScans', maxRecentScans);
+    
+    // Restart sync interval with new value
+    startSyncInterval();
+    
+    // Trim recent scans to new limit
+    recentScans = recentScans.slice(0, maxRecentScans);
+    saveData();
+    renderRecentScans();
+    
+    showToast('Настройки сохранены!', 'success');
+    closeSettingsModal();
+}
 function handleQRCodeScan(decodedText){closeScanner();processScannedCode(decodedText);}
 function handleManualInput(){const input=document.getElementById('manual-code');const code=input.value.trim();if(code){processScannedCode(code);input.value='';}else{showToast('Введите код','error');}}function handleManualInputModal(){const input=document.getElementById('manual-code-modal');const code=input.value.trim();if(code){closeScanner();processScannedCode(code);input.value='';}else{showToast('Введите код','error');}}
 function processScannedCode(code){const parts=code.split('_');if(parts.length!==2){showToast('Неверный формат кода. Используйте формат: НОМЕР_РУЛОН (например, 2020_1)','error');return;}const orderId=parts[0];const rollNumber=parseInt(parts[1]);if(isNaN(rollNumber)){showToast('Неверный номер рулона','error');return;}addToRecentScans(code);if(!orders[orderId]){if(!confirm('Рулон '+code+' не найден в базе. Добавить?')){showToast('Отменено','info');return;}const totalRolls=rollNumber;createQuickOrder(orderId,totalRolls,rollNumber);}else{const order=orders[orderId];if(rollNumber>order.totalRolls){showToast('В заказе '+order.totalRolls+' рулонов. Рулон '+rollNumber+' не существует.','error');return;}openRecordModal(orderId,rollNumber);}}
 function createQuickOrder(orderId,totalRolls,activeRollNumber){const rolls=[];for(let i=1;i<=totalRolls;i++){rolls.push({rollNumber:i,factoryLength:null,measuredLength:null,shrinkage:null,status:'pending'});}orders[orderId]={id:orderId,totalRolls,rolls,status:'pending'};saveData();syncToGoogleSheets();showToast('Заказ '+orderId+' создан','success');openRecordModal(orderId,activeRollNumber);}
-function addToRecentScans(code){const timestamp=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});recentScans=recentScans.filter(scan=>scan.code!==code);recentScans.unshift({code,timestamp});recentScans=recentScans.slice(0,5);saveData();renderRecentScans();}
+function addToRecentScans(code){const timestamp=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});recentScans=recentScans.filter(scan=>scan.code!==code);recentScans.unshift({code,timestamp});recentScans=recentScans.slice(0, maxRecentScans);saveData();renderRecentScans();}
 function renderRecentScans(){const container=document.getElementById('recent-list');if(recentScans.length===0){container.innerHTML='<p class="empty-state">Пока нет сканирований</p>';return;}container.innerHTML=recentScans.map(scan=>{const parts=scan.code.split('_');const orderId=parts[0];const rollNumber=parts[1];let syncStatusIcon = '';if (orders[orderId]) {const roll = orders[orderId].rolls.find(r => r.rollNumber === parseInt(rollNumber));if (roll) {const syncStatus = roll.syncStatus || 'pending';if (syncStatus === 'synced') {syncStatusIcon = '<span class="recent-sync-icon synced" title="Синхронизировано">✅</span>';} else if (syncStatus === 'pending') {syncStatusIcon = '<span class="recent-sync-icon pending" title="Ожидает отправки">⏳</span>';} else if (syncStatus === 'failed') {syncStatusIcon = '<button class="recent-retry-btn" onclick="event.stopPropagation(); manualRetrySync(\''+orderId+'\', '+rollNumber+')" title="Нажмите для повторной отправки">🔄</button>';} else {syncStatusIcon = '<span class="recent-sync-icon pending" title="Ожидает отправки">⏳</span>';}}} else {syncStatusIcon = '<span class="recent-sync-icon pending" title="Ожидает отправки">⏳</span>';}return'<div class="recent-item" data-code="'+scan.code+'"><span class="recent-code">'+scan.code+'</span><span style="display:flex;align-items:center;gap:8px;">'+syncStatusIcon+'<span class="recent-time">'+scan.timestamp+'</span></span></div>';}).join('');container.querySelectorAll('.recent-item').forEach(item=>{item.addEventListener('click',()=>{const code=item.dataset.code;processScannedCode(code);});});}
 function openRecordModal(orderId,rollNumber){currentOrderId=orderId;currentRollNumber=rollNumber;const order=orders[orderId];const roll=order.rolls.find(r=>r.rollNumber===rollNumber);document.getElementById('record-order-id').textContent=orderId;document.getElementById('record-roll-number').textContent=rollNumber;document.getElementById('factory-length').value=roll&&roll.factoryLength||'';document.getElementById('measured-length').value=roll&&roll.measuredLength||'';document.getElementById('shrinkage').value=roll&&roll.shrinkage||'';document.getElementById('record-modal').classList.add('active');}
 function closeRecordModal(){document.getElementById('record-modal').classList.remove('active');currentOrderId=null;currentRollNumber=null;}
