@@ -180,7 +180,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v65</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v66</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -856,7 +856,8 @@ function openZbarScanner() {
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                // Используем 'doInvert' для лучшего распознавания под углами
+                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'doInvert' });
                 
                 if (code) {
                     console.log('[ZBar] QR CODE DETECTED:', code.data);
@@ -1027,7 +1028,8 @@ function openJsQRWithCamera(modal, reader) {
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                // Используем 'doInvert' для лучшего распознавания под углами
+                var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'doInvert' });
                 
                 if (code) {
                     console.log('[jsQR] QR CODE DETECTED:', code.data);
