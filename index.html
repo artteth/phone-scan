@@ -80,6 +80,7 @@
         .recent-item:hover { transform: translateX(4px); }
         .recent-code { font-weight: 600; color: var(--primary); }
         .recent-time { font-size: 0.8rem; color: var(--text-muted); }
+        .recent-item .sync-badge { margin-left: 8px; font-size: 0.9rem; }
         .empty-state { text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem; }
         .orders-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
         .order-card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: pointer; transition: all 0.2s ease; }
@@ -169,6 +170,26 @@
         .settings-group input[type="range"] { width: 100%; height: 6px; border-radius: 3px; background: var(--border); outline: none; -webkit-appearance: none; }
         .settings-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); cursor: pointer; }
         .settings-info { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+        
+        /* Sync status indicators */
+        .sync-indicator { font-size: 1.1rem; }
+        .sync-indicator.synced { color: var(--success); }
+        .sync-indicator.pending { color: var(--warning); }
+        .sync-indicator.failed { color: var(--danger); }
+        .sync-retry-btn { background: transparent; border: none; font-size: 1.1rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s ease; }
+        .sync-retry-btn:hover { background: rgba(239, 68, 68, 0.1); transform: scale(1.1); }
+        .sync-retry-btn:active { transform: scale(0.95); }
+        
+        /* Pending sync badge */
+        .pending-sync-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 500; background: var(--warning); color: white; }
+        .pending-sync-badge:empty { display: none; }
+        
+        /* Sync status in header */
+        .sync-indicator-header { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .sync-indicator-header.online { background: var(--success); }
+        .sync-indicator-header.offline { background: var(--danger); }
+        .sync-indicator-header.syncing { background: var(--warning); animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -180,7 +201,7 @@
         <div id="scanner-page" class="page active">
             <header class="header">
                 <button class="settings-btn" id="settings-btn" title="Настройки">⚙️</button>
-                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v67</small></h1>
+                <h1>📦 Сканер рулонов ткани <small style="font-size:0.6em;opacity:0.7;">v68</small></h1>
             </header>
             <main class="main-content">
                 <div class="scan-section">
@@ -426,7 +447,7 @@
                 <div class="rolls-table-container">
                     <table id="rolls-table" class="rolls-table">
                         <thead>
-                            <tr><th>№</th><th>Заводской</th><th>Измеренный</th><th>Усадка</th><th>Статус</th><th></th></tr>
+                            <tr><th>№</th><th>Заводской</th><th>Измеренный</th><th>Усадка</th><th>Статус</th><th>Синхр.</th><th></th></tr>
                         </thead>
                         <tbody id="rolls-tbody"></tbody>
                     </table>
@@ -556,14 +577,233 @@
     <script>
 const STORAGE_KEY = 'fabric_inventory_data';
 const RECENT_SCANS_KEY = 'recent_scans';
+const PENDING_SYNC_KEY = 'pending_sync_queue';
 const TEST_CODES = ['2020_1','2020_2','2020_3','2020_4','2020_5','2021_1','2021_2','2021_3','2022_1','2022_2','2022_3','2022_4'];
 let orders = {}, recentScans = [], currentOrderId = null, currentRollNumber = null, html5QrcodeScanner = null;
 let scannerFps = localStorage.getItem('scannerFps') ? parseInt(localStorage.getItem('scannerFps')) : 10;
+let pendingSyncQueue = [];
+let syncInterval = null;
+let isOnline = navigator.onLine;
 
-document.addEventListener('DOMContentLoaded', () => { loadData(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); syncWithGoogleSheets(true); setInterval(()=>{console.log('Auto-sync...');syncWithGoogleSheets(false);},10000); });
+// Track online/offline status
+window.addEventListener('online', () => { isOnline = true; updateSyncStatusUI(); trySyncPendingData(); });
+window.addEventListener('offline', () => { isOnline = false; updateSyncStatusUI(); });
+
+document.addEventListener('DOMContentLoaded', () => { loadData(); loadPendingSyncQueue(); initializeEventListeners(); renderRecentScans(); renderQRCodePage(); if(Object.keys(orders).length===0){initializeTestData();} renderOrdersList(); syncWithGoogleSheets(true); startSyncInterval(); updateSyncStatusUI(); });
 
 function loadData(){const storedOrders=localStorage.getItem(STORAGE_KEY);const storedScans=localStorage.getItem(RECENT_SCANS_KEY);if(storedOrders){orders=JSON.parse(storedOrders);} if(storedScans){recentScans=JSON.parse(storedScans);}}
 function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));localStorage.setItem(RECENT_SCANS_KEY,JSON.stringify(recentScans));}
+
+// ===== Pending Sync Queue Functions =====
+function loadPendingSyncQueue() {
+    const stored = localStorage.getItem(PENDING_SYNC_KEY);
+    if (stored) {
+        try {
+            pendingSyncQueue = JSON.parse(stored);
+            console.log('Loaded pending sync queue:', pendingSyncQueue.length, 'items');
+        } catch (e) {
+            console.error('Error loading pending sync queue:', e);
+            pendingSyncQueue = [];
+        }
+    }
+}
+
+function savePendingSyncQueue() {
+    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pendingSyncQueue));
+    updatePendingSyncIndicator();
+}
+
+function addToPendingSyncQueue(rollData) {
+    // Check if this roll is already in queue
+    const existingIndex = pendingSyncQueue.findIndex(item => 
+        item.orderId === rollData.orderId && item.rollNumber === rollData.rollNumber
+    );
+    
+    const queueItem = {
+        orderId: rollData.orderId,
+        rollNumber: rollData.rollNumber,
+        factoryLength: rollData.factoryLength,
+        measuredLength: rollData.measuredLength,
+        shrinkage: rollData.shrinkage,
+        timestamp: new Date().toISOString(),
+        retryCount: 0
+    };
+    
+    if (existingIndex >= 0) {
+        pendingSyncQueue[existingIndex] = queueItem;
+    } else {
+        pendingSyncQueue.push(queueItem);
+    }
+    
+    savePendingSyncQueue();
+    console.log('Added to pending sync queue:', queueItem);
+}
+
+function removeFromPendingSyncQueue(orderId, rollNumber) {
+    pendingSyncQueue = pendingSyncQueue.filter(item => 
+        !(item.orderId === orderId && item.rollNumber === rollNumber)
+    );
+    savePendingSyncQueue();
+}
+
+function isInPendingSyncQueue(orderId, rollNumber) {
+    return pendingSyncQueue.some(item => 
+        item.orderId === orderId && item.rollNumber === rollNumber
+    );
+}
+
+function startSyncInterval() {
+    if (syncInterval) clearInterval(syncInterval);
+    // Try to sync every 12 seconds (between 10-15 seconds as requested)
+    syncInterval = setInterval(() => {
+        console.log('Auto-sync interval triggered');
+        if (pendingSyncQueue.length > 0) {
+            trySyncPendingData();
+        }
+    }, 12000);
+    console.log('Sync interval started (12 seconds)');
+}
+
+async function trySyncPendingData() {
+    if (pendingSyncQueue.length === 0) return;
+    if (!isOnline) {
+        console.log('Offline - skipping pending sync');
+        return;
+    }
+    
+    console.log('Trying to sync', pendingSyncQueue.length, 'pending items...');
+    
+    const itemsToRemove = [];
+    
+    for (let i = 0; i < pendingSyncQueue.length; i++) {
+        const item = pendingSyncQueue[i];
+        try {
+            const sheetsData = [{
+                orderId: item.orderId,
+                rollNumber: item.rollNumber,
+                factoryLength: String(item.factoryLength).replace('.', ','),
+                measuredLength: item.measuredLength ? String(item.measuredLength).replace('.', ',') : '',
+                shrinkage: item.shrinkage ? String(item.shrinkage).replace('.', ',') : ''
+            }];
+            
+            await apiJsonp('saveData', { data: JSON.stringify(sheetsData) });
+            console.log('Successfully synced:', item.orderId, item.rollNumber);
+            itemsToRemove.push({ orderId: item.orderId, rollNumber: item.rollNumber });
+            
+            // Update the roll's sync status in orders
+            if (orders[item.orderId]) {
+                const roll = orders[item.orderId].rolls.find(r => r.rollNumber === item.rollNumber);
+                if (roll) {
+                    roll.syncStatus = 'synced';
+                }
+            }
+            
+        } catch (e) {
+            console.error('Failed to sync item:', item, e);
+            item.retryCount = (item.retryCount || 0) + 1;
+            
+            // Mark as failed after multiple retries
+            if (item.retryCount >= 5) {
+                if (orders[item.orderId]) {
+                    const roll = orders[item.orderId].rolls.find(r => r.rollNumber === item.rollNumber);
+                    if (roll) {
+                        roll.syncStatus = 'failed';
+                    }
+                }
+            }
+        }
+    }
+    
+    // Remove successfully synced items
+    itemsToRemove.forEach(item => {
+        removeFromPendingSyncQueue(item.orderId, item.rollNumber);
+    });
+    
+    // Save updated orders with sync status
+    saveData();
+    
+    // Re-render if on order detail page
+    if (document.getElementById('order-detail-page').classList.contains('active') && currentOrderId) {
+        renderOrderDetail(currentOrderId);
+    }
+    
+    updateSyncStatusUI();
+}
+
+function updateSyncStatusUI() {
+    const statusEl = document.getElementById('sync-status');
+    const statusTextEl = document.getElementById('sync-status-text');
+    
+    if (!statusEl || !statusTextEl) return;
+    
+    if (!isOnline) {
+        statusEl.innerHTML = '🔴';
+        statusTextEl.textContent = 'Нет подключения';
+    } else if (pendingSyncQueue.length > 0) {
+        statusEl.innerHTML = '🟡';
+        statusTextEl.textContent = 'Ожидает отправки: ' + pendingSyncQueue.length;
+    } else {
+        statusEl.innerHTML = '🟢';
+        statusTextEl.textContent = 'Все данные синхронизированы';
+    }
+}
+
+function updatePendingSyncIndicator() {
+    updateSyncStatusUI();
+}
+
+// Manual retry for a specific roll
+async function manualRetrySync(orderId, rollNumber) {
+    const order = orders[orderId];
+    if (!order) return;
+    
+    const roll = order.rolls.find(r => r.rollNumber === rollNumber);
+    if (!roll) return;
+    
+    showToast('Попытка отправки...', 'info');
+    
+    try {
+        const sheetsData = [{
+            orderId: orderId,
+            rollNumber: rollNumber,
+            factoryLength: String(roll.factoryLength).replace('.', ','),
+            measuredLength: roll.measuredLength ? String(roll.measuredLength).replace('.', ',') : '',
+            shrinkage: roll.shrinkage ? String(roll.shrinkage).replace('.', ',') : ''
+        }];
+        
+        await apiJsonp('saveData', { data: JSON.stringify(sheetsData) });
+        
+        // Success
+        roll.syncStatus = 'synced';
+        removeFromPendingSyncQueue(orderId, rollNumber);
+        saveData();
+        
+        showToast('Данные успешно отправлены!', 'success');
+        
+        // Re-render
+        if (document.getElementById('order-detail-page').classList.contains('active')) {
+            renderOrderDetail(orderId);
+        }
+        
+    } catch (e) {
+        console.error('Manual retry failed:', e);
+        roll.syncStatus = 'failed';
+        addToPendingSyncQueue({
+            orderId: orderId,
+            rollNumber: rollNumber,
+            factoryLength: roll.factoryLength,
+            measuredLength: roll.measuredLength,
+            shrinkage: roll.shrinkage
+        });
+        saveData();
+        
+        showToast('Ошибка отправки: ' + e.message, 'error');
+        
+        if (document.getElementById('order-detail-page').classList.contains('active')) {
+            renderOrderDetail(orderId);
+        }
+    }
+}
 function initializeTestData(){orders['2020']={id:'2020',totalRolls:5,rolls:[{rollNumber:1,factoryLength:50,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:2,factoryLength:48,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:49,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:5,factoryLength:51,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2021']={id:'2021',totalRolls:3,rolls:[{rollNumber:1,factoryLength:45,measuredLength:43.5,shrinkage:3.3,status:'completed'},{rollNumber:2,factoryLength:47,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:3,factoryLength:46,measuredLength:null,shrinkage:null,status:'pending'}]};orders['2022']={id:'2022',totalRolls:4,rolls:[{rollNumber:1,factoryLength:55,measuredLength:53.8,shrinkage:2.2,status:'completed'},{rollNumber:2,factoryLength:53,measuredLength:51.5,shrinkage:2.8,status:'completed'},{rollNumber:3,factoryLength:54,measuredLength:null,shrinkage:null,status:'pending'},{rollNumber:4,factoryLength:52,measuredLength:null,shrinkage:null,status:'pending'}]};saveData();}
 
 // ===== Google Sheets Sync =====
@@ -664,7 +904,8 @@ function manualSync(){
     syncWithGoogleSheets(true);
 }
 
-async function syncWithGoogleSheets(showToastFlag=true){if(isSyncing)return;isSyncing=true;if(showToastFlag)showLoading();console.log('Starting sync with Google Sheets...');try{const data=await apiJsonp('getData');console.log('Data from Google Sheets:',JSON.stringify(data));if(data&&data.orders&&Object.keys(data.orders).length>0){if(forceSync){console.log('Force sync - replacing local data');orders={};recentScans=[];forceSync=false;}orders=data.orders;Object.values(orders).forEach(order=>{if(order.rolls){order.rolls.forEach(roll=>{if(typeof roll.factoryLength==='string')roll.factoryLength=parseFloat(roll.factoryLength.replace(/,/g,'.').replace(/[^0-9.-]/g,''))||null;if(typeof roll.measuredLength==='string')roll.measuredLength=parseFloat(roll.measuredLength.replace(/,/g,'.').replace(/[^0-9.-]/g,''))||null;if(typeof roll.shrinkage==='string')roll.shrinkage=parseFloat(roll.shrinkage.replace(/,/g,'.').replace(/[^0-9.-]/g,''))||null;});}const completedCount=order.rolls?order.rolls.filter(r=>r.measuredLength&&r.shrinkage).length:0;const totalCount=order.totalRolls||(order.rolls?order.rolls.length:0);if(completedCount===totalCount&&totalCount>0){order.status='completed';}else if(completedCount>0){order.status='in-progress';}else{order.status='pending';}});console.log('Orders after sync:',JSON.stringify(orders));saveData();renderOrdersList();renderRecentScans();if(showToastFlag){showToast('Данные синхронизированы: '+Object.keys(orders).length+' заказов','success');}}else{console.log('No data from Google Sheets - orders object is empty');if(showToastFlag){showToast('Нет данных для синхронизации. Добавьте данные в Google Таблицу','info');}}}catch(e){console.error('Sync error:',e);if(showToastFlag){showToast('Ошибка синхронизации: '+e.message,'error');}}finally{isSyncing=false;hideLoading();}}
+async function syncWithGoogleSheets(showToastFlag=true){if(isSyncing)return;isSyncing=true;if(showToastFlag)showLoading();console.log('Starting sync with Google Sheets...');try{const data=await apiJsonp('getData');console.log('Data from Google Sheets:',JSON.stringify(data));if(data&&data.orders&&Object.keys(data.orders).length>0){if(forceSync){console.log('Force sync - replacing local data');orders={};recentScans=[];forceSync=false;}orders=data.orders;Object.values(orders).forEach(order=>{if(order.rolls){order.rolls.forEach(roll=>{if(typeof roll.factoryLength==='string')roll.factoryLength=parseFloat(roll.factoryLength.replace(/,/g,'.').replace(/[^0-9.-]/g,''))||null;if(typeof roll.measuredLength==='string')roll.measuredLength=parseFloat(roll.measuredLength.replace(/,/g,'.').replace(/[^0-9.-]/g,''))||null;if(typeof roll.shrinkage==='string')roll.shrinkage=parseFloat(roll.shrinkage.replace(/,/g,'.').replace(/[^0-9.-]/g,''))||null;// Mark data from Google Sheets as synced
+roll.syncStatus = 'synced';});}const completedCount=order.rolls?order.rolls.filter(r=>r.measuredLength&&r.shrinkage).length:0;const totalCount=order.totalRolls||(order.rolls?order.rolls.length:0);if(completedCount===totalCount&&totalCount>0){order.status='completed';}else if(completedCount>0){order.status='in-progress';}else{order.status='pending';}});console.log('Orders after sync:',JSON.stringify(orders));saveData();renderOrdersList();renderRecentScans();if(showToastFlag){showToast('Данные синхронизированы: '+Object.keys(orders).length+' заказов','success');}}else{console.log('No data from Google Sheets - orders object is empty');if(showToastFlag){showToast('Нет данных для синхронизации. Добавьте данные в Google Таблицу','info');}}}catch(e){console.error('Sync error:',e);if(showToastFlag){showToast('Ошибка синхронизации: '+e.message,'error');}}finally{isSyncing=false;hideLoading();}}
 
 async function syncToGoogleSheets(){if(isSyncing)return;isSyncing=true;console.log('Syncing to Google Sheets...');const maxRetries=3;let lastError=null;let dataSaved=false;for(let attempt=1;attempt<=maxRetries;attempt++){try{const sheetsData=[];Object.values(orders).forEach(order=>{order.rolls.forEach(roll=>{// Only send rolls that have at least factoryLength
 if(roll.factoryLength!==null&&roll.factoryLength!==undefined&&roll.factoryLength!==''){const fl=String(roll.factoryLength).replace('.',',');const ml=roll.measuredLength!==null&&roll.measuredLength!==undefined?String(roll.measuredLength).replace('.',','):'';const sh=roll.shrinkage!==null&&roll.shrinkage!==undefined?String(roll.shrinkage).replace('.',','):'';sheetsData.push({orderId:order.id,rollNumber:roll.rollNumber,factoryLength:fl,measuredLength:ml,shrinkage:sh});}});});console.log('Sending data count:',sheetsData.length);console.log('Sending data:',JSON.stringify(sheetsData));if(sheetsData.length===0){console.log('No data to save - skipping');isSyncing=false;return false;}await apiJsonp('saveData',{data:JSON.stringify(sheetsData)});console.log('Save successful');dataSaved=true;isSyncing=false;return true;}catch(e){console.error('Save attempt '+attempt+' failed:',e);lastError=e;if(attempt<maxRetries){console.log('Retrying in '+(attempt*1000)+'ms...');await new Promise(r=>setTimeout(r,attempt*1000));}}}console.error('All save attempts failed');isSyncing=false;throw lastError;}
@@ -718,17 +959,30 @@ function handleManualInput(){const input=document.getElementById('manual-code');
 function processScannedCode(code){const parts=code.split('_');if(parts.length!==2){showToast('Неверный формат кода. Используйте формат: НОМЕР_РУЛОН (например, 2020_1)','error');return;}const orderId=parts[0];const rollNumber=parseInt(parts[1]);if(isNaN(rollNumber)){showToast('Неверный номер рулона','error');return;}addToRecentScans(code);if(!orders[orderId]){if(!confirm('Рулон '+code+' не найден в базе. Добавить?')){showToast('Отменено','info');return;}const totalRolls=rollNumber;createQuickOrder(orderId,totalRolls,rollNumber);}else{const order=orders[orderId];if(rollNumber>order.totalRolls){showToast('В заказе '+order.totalRolls+' рулонов. Рулон '+rollNumber+' не существует.','error');return;}openRecordModal(orderId,rollNumber);}}
 function createQuickOrder(orderId,totalRolls,activeRollNumber){const rolls=[];for(let i=1;i<=totalRolls;i++){rolls.push({rollNumber:i,factoryLength:null,measuredLength:null,shrinkage:null,status:'pending'});}orders[orderId]={id:orderId,totalRolls,rolls,status:'pending'};saveData();syncToGoogleSheets();showToast('Заказ '+orderId+' создан','success');openRecordModal(orderId,activeRollNumber);}
 function addToRecentScans(code){const timestamp=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});recentScans=recentScans.filter(scan=>scan.code!==code);recentScans.unshift({code,timestamp});recentScans=recentScans.slice(0,5);saveData();renderRecentScans();}
-function renderRecentScans(){const container=document.getElementById('recent-list');if(recentScans.length===0){container.innerHTML='<p class="empty-state">Пока нет сканирований</p>';return;}container.innerHTML=recentScans.map(scan=>'<div class="recent-item" data-code="'+scan.code+'"><span class="recent-code">'+scan.code+'</span><span class="recent-time">'+scan.timestamp+'</span></div>').join('');container.querySelectorAll('.recent-item').forEach(item=>{item.addEventListener('click',()=>{const code=item.dataset.code;processScannedCode(code);});});}
+function renderRecentScans(){const container=document.getElementById('recent-list');if(recentScans.length===0){container.innerHTML='<p class="empty-state">Пока нет сканирований</p>';return;}container.innerHTML=recentScans.map(scan=>{const parts=scan.code.split('_');const orderId=parts[0];const rollNumber=parts[1];let syncStatusIcon = '';if (orders[orderId]) {const roll = orders[orderId].rolls.find(r => r.rollNumber === parseInt(rollNumber));if (roll) {const syncStatus = roll.syncStatus || 'pending';if (syncStatus === 'synced') {syncStatusIcon = ' ✅';} else if (syncStatus === 'pending') {syncStatusIcon = ' ⏳';} else if (syncStatus === 'failed') {syncStatusIcon = ' ❌';}}}return'<div class="recent-item" data-code="'+scan.code+'"><span class="recent-code">'+scan.code+syncStatusIcon+'</span><span class="recent-time">'+scan.timestamp+'</span></div>';}).join('');container.querySelectorAll('.recent-item').forEach(item=>{item.addEventListener('click',()=>{const code=item.dataset.code;processScannedCode(code);});});}
 function openRecordModal(orderId,rollNumber){currentOrderId=orderId;currentRollNumber=rollNumber;const order=orders[orderId];const roll=order.rolls.find(r=>r.rollNumber===rollNumber);document.getElementById('record-order-id').textContent=orderId;document.getElementById('record-roll-number').textContent=rollNumber;document.getElementById('factory-length').value=roll&&roll.factoryLength||'';document.getElementById('measured-length').value=roll&&roll.measuredLength||'';document.getElementById('shrinkage').value=roll&&roll.shrinkage||'';document.getElementById('record-modal').classList.add('active');}
 function closeRecordModal(){document.getElementById('record-modal').classList.remove('active');currentOrderId=null;currentRollNumber=null;}
 function handleRecordSubmit(e){e.preventDefault();const btn=e.target.querySelector('button[type="submit"]');if(btn){btn.innerHTML='<span class="btn-spinner"></span> Сохранение...';btn.disabled=true;}requestAnimationFrame(()=>{saveRollData(true,btn);});}
 function handlePartialSave(){const btn=document.getElementById('save-partial');if(btn){btn.innerHTML='<span class="btn-spinner"></span> Сохранение...';btn.disabled=true;}requestAnimationFrame(()=>{saveRollData(false,btn);});}
-function saveRollData(complete,btn){const factoryLength=parseFloat(document.getElementById('factory-length').value);const measuredLength=parseFloat(document.getElementById('measured-length').value)||null;const shrinkage=parseFloat(document.getElementById('shrinkage').value)||null;if(isNaN(factoryLength)){showToast('Введите заводской метраж','error');if(btn){btn.textContent=btn.id==='save-partial'?'Записать частично':'Записать';btn.disabled=false;}return;}const order=orders[currentOrderId];let roll=order.rolls.find(r=>r.rollNumber===currentRollNumber);if(!roll){roll={rollNumber:currentRollNumber,factoryLength,measuredLength:null,shrinkage:null,status:'pending'};order.rolls.push(roll);}roll.factoryLength=factoryLength;if(measuredLength!==null&&shrinkage!==null){roll.measuredLength=measuredLength;roll.shrinkage=shrinkage;roll.status='completed';}else if(measuredLength!==null||shrinkage!==null){roll.measuredLength=measuredLength;roll.shrinkage=shrinkage;roll.status='partial';}else{roll.status='pending';}updateOrderStatus(order);localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));localStorage.setItem(RECENT_SCANS_KEY,JSON.stringify(recentScans));showToast('Данные сохранены локально','success');setTimeout(()=>{closeRecordModal();},500);setTimeout(()=>{syncToGoogleSheets().then((saved)=>{console.log('Google Sheets sync completed, saved:',saved);if(saved){showToast('Сохранено в Google Таблице','success');}if(btn){btn.textContent='Сохранено!';setTimeout(()=>{btn.textContent=btn.id==='save-partial'?'Записать частично':'Записать';btn.disabled=false;},1500);}}).catch(e=>{console.error('Save error:',e);showToast('Ошибка сохранения в Google Таблице','error');if(btn){btn.textContent='Ошибка';setTimeout(()=>{btn.textContent=btn.id==='save-partial'?'Записать частично':'Записать';btn.disabled=false;},2000);}});},100);if(document.getElementById('order-detail-page').classList.contains('active')){renderOrderDetail(currentOrderId);}}
+function saveRollData(complete,btn){const factoryLength=parseFloat(document.getElementById('factory-length').value);const measuredLength=parseFloat(document.getElementById('measured-length').value)||null;const shrinkage=parseFloat(document.getElementById('shrinkage').value)||null;if(isNaN(factoryLength)){showToast('Введите заводской метраж','error');if(btn){btn.textContent=btn.id==='save-partial'?'Записать частично':'Записать';btn.disabled=false;}return;}const order=orders[currentOrderId];let roll=order.rolls.find(r=>r.rollNumber===currentRollNumber);if(!roll){roll={rollNumber:currentRollNumber,factoryLength,measuredLength:null,shrinkage:null,status:'pending'};order.rolls.push(roll);}roll.factoryLength=factoryLength;if(measuredLength!==null&&shrinkage!==null){roll.measuredLength=measuredLength;roll.shrinkage=shrinkage;roll.status='completed';}else if(measuredLength!==null||shrinkage!==null){roll.measuredLength=measuredLength;roll.shrinkage=shrinkage;roll.status='partial';}else{roll.status='pending';}updateOrderStatus(order);localStorage.setItem(STORAGE_KEY,JSON.stringify(orders));localStorage.setItem(RECENT_SCANS_KEY,JSON.stringify(recentScans));showToast('Данные сохранены локально','success');// Mark as pending sync by default
+roll.syncStatus = 'pending';
+addToPendingSyncQueue({orderId: currentOrderId, rollNumber: currentRollNumber, factoryLength: roll.factoryLength, measuredLength: roll.measuredLength, shrinkage: roll.shrinkage});setTimeout(()=>{closeRecordModal();},500);setTimeout(()=>{syncToGoogleSheets().then((saved)=>{console.log('Google Sheets sync completed, saved:',saved);if(saved){showToast('Сохранено в Google Таблице','success');removeFromPendingSyncQueue(currentOrderId, currentRollNumber);roll.syncStatus = 'synced';}else{roll.syncStatus = 'pending';addToPendingSyncQueue({orderId: currentOrderId, rollNumber: currentRollNumber, factoryLength: roll.factoryLength, measuredLength: roll.measuredLength, shrinkage: roll.shrinkage});}if(btn){btn.textContent='Сохранено!';setTimeout(()=>{btn.textContent=btn.id==='save-partial'?'Записать частично':'Записать';btn.disabled=false;},1500);}}).catch(e=>{console.error('Save error:',e);showToast('Ошибка сохранения в Google Таблице','error');roll.syncStatus = 'failed';addToPendingSyncQueue({orderId: currentOrderId, rollNumber: currentRollNumber, factoryLength: roll.factoryLength, measuredLength: roll.measuredLength, shrinkage: roll.shrinkage});if(btn){btn.textContent='Ошибка';setTimeout(()=>{btn.textContent=btn.id==='save-partial'?'Записать частично':'Записать';btn.disabled=false;},2000);}});saveData();},100);if(document.getElementById('order-detail-page').classList.contains('active')){renderOrderDetail(currentOrderId);}}
 function updateOrderStatus(order){const completedCount=order.rolls.filter(r=>r.status==='completed').length;const partialCount=order.rolls.filter(r=>r.status==='partial').length;if(completedCount===order.totalRolls){order.status='completed';}else if(completedCount>0||partialCount>0){order.status='in-progress';}else{order.status='pending';}}
 function renderOrdersList(filter=''){const container=document.getElementById('orders-list');const filteredOrders=Object.values(orders).filter(order=>order.id.includes(filter));if(filteredOrders.length===0){container.innerHTML='<p class="empty-state">Заказов не найдено</p>';return;}container.innerHTML=filteredOrders.map(order=>{const completedCount=order.rolls.filter(r=>r.status==='completed').length;const progress=(completedCount/order.totalRolls)*100;let statusClass='pending';let statusText='Ожидает';if(order.status==='in-progress'){statusClass='in-progress';statusText='В работе';}else if(order.status==='completed'){statusClass='completed';statusText='Завершён';}return'<div class="order-card" data-order-id="'+order.id+'"><div class="order-header"><span class="order-id">Заказ '+order.id+'</span><span class="order-status '+statusClass+'">'+statusText+'</span></div><div class="order-progress">'+completedCount+' из '+order.totalRolls+' рулонов</div><div class="order-progress-bar"><div class="order-progress-fill" style="width: '+progress+'%"></div></div></div>';}).join('');container.querySelectorAll('.order-card').forEach(card=>{card.addEventListener('click',()=>{const orderId=card.dataset.orderId;showOrderDetail(orderId);});});}
 function handleSearch(e){renderOrdersList(e.target.value);}
 function showOrderDetail(orderId){currentOrderId=orderId;document.getElementById('detail-order-id').textContent=orderId;renderOrderDetail(orderId);showPage('order-detail-page');}
-function renderOrderDetail(orderId){const order=orders[orderId];const completedCount=order.rolls.filter(r=>r.status==='completed').length;document.getElementById('order-progress').textContent=completedCount+'/'+order.totalRolls+' рулонов';let statusClass='pending';let statusText='Ожидает';if(order.status==='in-progress'){statusClass='in-progress';statusText='В работе';}else if(order.status==='completed'){statusClass='completed';statusText='Завершён';}const statusBadge=document.getElementById('order-status');statusBadge.className='summary-value status-badge '+statusClass;statusBadge.textContent=statusText;const tbody=document.getElementById('rolls-tbody');tbody.innerHTML=order.rolls.map(roll=>{let statusClass='pending';let statusText='Ожидает';if(roll.status==='partial'){statusClass='partial';statusText='Частично';}else if(roll.status==='completed'){statusClass='completed';statusText='Готов';}return'<tr><td class="roll-roll-number">'+roll.rollNumber+'</td><td>'+(roll.factoryLength!==null?roll.factoryLength+' м':'-')+'</td><td>'+(roll.measuredLength!==null?roll.measuredLength+' м':'-')+'</td><td>'+(roll.shrinkage!==null?roll.shrinkage+'%':'-')+'</td><td><span class="roll-status '+statusClass+'">'+statusText+'</span></td><td><button class="edit-roll-btn" data-roll="'+roll.rollNumber+'">Изменить</button></td></tr>';}).join('');tbody.querySelectorAll('.edit-roll-btn').forEach(btn=>{btn.addEventListener('click',()=>{const rollNumber=parseInt(btn.dataset.roll);openRecordModal(orderId,rollNumber);});});}
+function renderOrderDetail(orderId){const order=orders[orderId];const completedCount=order.rolls.filter(r=>r.status==='completed').length;document.getElementById('order-progress').textContent=completedCount+'/'+order.totalRolls+' рулонов';let statusClass='pending';let statusText='Ожидает';if(order.status==='in-progress'){statusClass='in-progress';statusText='В работе';}else if(order.status==='completed'){statusClass='completed';statusText='Завершён';}const statusBadge=document.getElementById('order-status');statusBadge.className='summary-value status-badge '+statusClass;statusBadge.textContent=statusText;const tbody=document.getElementById('rolls-tbody');tbody.innerHTML=order.rolls.map(roll=>{let statusClass='pending';let statusText='Ожидает';if(roll.status==='partial'){statusClass='partial';statusText='Частично';}else if(roll.status==='completed'){statusClass='completed';statusText='Готов';}// Sync status indicator
+let syncIndicator = '';
+const syncStatus = roll.syncStatus || 'pending';
+if (syncStatus === 'synced') {
+    syncIndicator = '<span class="sync-indicator synced" title="Синхронизировано">✅</span>';
+} else if (syncStatus === 'pending') {
+    syncIndicator = '<span class="sync-indicator pending" title="Ожидает отправки">⏳</span>';
+} else if (syncStatus === 'failed') {
+    syncIndicator = '<button class="sync-retry-btn" onclick="manualRetrySync(\''+orderId+'\', '+roll.rollNumber+')" title="Не отправилось. Нажмите для повтора">❌</button>';
+} else {
+    syncIndicator = '<span class="sync-indicator pending" title="Ожидает отправки">⏳</span>';
+}return'<tr><td class="roll-roll-number">'+roll.rollNumber+'</td><td>'+(roll.factoryLength!==null?roll.factoryLength+' м':'-')+'</td><td>'+(roll.measuredLength!==null?roll.measuredLength+' м':'-')+'</td><td>'+(roll.shrinkage!==null?roll.shrinkage+'%':'-')+'</td><td><span class="roll-status '+statusClass+'">'+statusText+'</span></td><td style="display:flex;align-items:center;gap:8px;">'+syncIndicator+'<button class="edit-roll-btn" data-roll="'+roll.rollNumber+'">Изменить</button></td></tr>';}).join('');tbody.querySelectorAll('.edit-roll-btn').forEach(btn=>{btn.addEventListener('click',()=>{const rollNumber=parseInt(btn.dataset.roll);openRecordModal(orderId,rollNumber);});});}
 function openNewOrderModal(){document.getElementById('new-order-modal').classList.add('active');document.getElementById('new-order-id').value='';document.getElementById('new-order-rolls').value='';}
 function closeNewOrderModal(){document.getElementById('new-order-modal').classList.remove('active');}
 function handleNewOrderSubmit(e){e.preventDefault();const orderId=document.getElementById('new-order-id').value.trim();const totalRolls=parseInt(document.getElementById('new-order-rolls').value);if(!orderId||isNaN(totalRolls)||totalRolls<1){showToast('Заполните все поля корректно','error');return;}createOrder(orderId,totalRolls);closeNewOrderModal();showToast('Заказ создан','success');renderOrdersList();}
